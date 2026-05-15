@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, Tuple
 from urllib.parse import urlparse
 
 
@@ -13,7 +12,7 @@ class PathExpression:
         raise NotImplementedError
 
     @staticmethod
-    def from_string(path) -> "PathExpression":
+    def from_string(path) -> PathExpression:
         if isinstance(path, PathExpression):
             return path
         if path is None:
@@ -63,7 +62,7 @@ class Inverse(PathExpression):
 
 @dataclass(frozen=True)
 class Sequence(PathExpression):
-    paths: Tuple[PathExpression, ...]
+    paths: tuple[PathExpression, ...]
 
     def __init__(self, paths: Iterable[PathExpression]):
         object.__setattr__(self, "paths", tuple(paths))

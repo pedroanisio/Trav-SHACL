@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-__author__ = 'Monica Figuera and Philipp D. Rohde'
+__author__ = "Monica Figuera and Philipp D. Rohde"
 
 from TravSHACL.core.Path import PathExpression
 
@@ -7,8 +6,18 @@ from TravSHACL.core.Path import PathExpression
 class Constraint:
     """Base class for all constraints."""
 
-    def __init__(self, id_=None, is_pos=None, satisfied=None, datatype=None, value=None,
-                 shape_ref=None, target_def=None, path=None, options=None):
+    def __init__(
+        self,
+        id_=None,
+        is_pos=None,
+        satisfied=None,
+        datatype=None,
+        value=None,
+        shape_ref=None,
+        target_def=None,
+        path=None,
+        options=None,
+    ):
         """
         Base constructor for all constraints.
 
@@ -30,6 +39,8 @@ class Constraint:
         self.value = value
         self.shapeRef = shape_ref
         self.target = target_def
+        self.min = -1
+        self.max = -1
 
         self.variables = []
         self.path = None if path is None else PathExpression.from_string(path)
@@ -102,7 +113,7 @@ class Constraint:
 
         if maxonly:
             v = variables[0]
-            builder.add_union_triples(path, '?' + v, or_value, or_affix, True, card=self.max)
+            builder.add_union_triples(path, "?" + v, or_value, or_affix, True, card=self.max)
             return
 
         if self.get_value() is not None:
@@ -114,13 +125,13 @@ class Constraint:
 
         if or_value > 0:
             v = variables[0]
-            builder.add_union_triples(path, '?' + v, or_value, or_affix, card=self.min)
+            builder.add_union_triples(path, "?" + v, or_value, or_affix, card=self.min)
         else:
             for v in variables:
                 if self.get_shape_ref() is not None:
                     builder.inter_shape_refs[v] = self.get_shape_ref()
-                    builder.triples.append('\n$inter_shape_type_to_add$')
-                builder.add_triple(path, '?' + v)
+                    builder.triples.append("\n$inter_shape_type_to_add$")
+                builder.add_triple(path, "?" + v)
 
         if self.get_datatype() is not None:
             for v in variables:
@@ -134,7 +145,7 @@ class Constraint:
         """Generates variable names for the SPARQL queries of the constraint."""
         vars_ = []
         if number_of_variables:
-            for elem in range(number_of_variables):
+            for _ in range(number_of_variables):
                 vars_.append(var_generator.generate_variable(type_))
 
         return vars_

@@ -6,18 +6,19 @@
 # -- Path setup --------------------------------------------------------------
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../'))
+
+sys.path.insert(0, os.path.abspath("../"))
 
 
 # -- Project information -----------------------------------------------------
-project = 'Trav-SHACL'
-copyright = '2019-2024, Philipp D. Rohde, Mónica Figuera and Uzoma Nwiwu'
-author = 'Philipp D. Rohde, Mónica Figuera and Uzoma Nwiwu'
+project = "Trav-SHACL"
+copyright = "2019-2024, Philipp D. Rohde, Mónica Figuera and Uzoma Nwiwu"
+author = "Philipp D. Rohde, Mónica Figuera and Uzoma Nwiwu"
 
 
 # The full version, including alpha/beta/rc tags
 def _get_version():
-    with open('../VERSION', 'r', encoding='utf8') as version_file:
+    with open("../VERSION", encoding="utf8") as version_file:
         version = version_file.read()
     return version
 
@@ -32,26 +33,26 @@ release = version
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.autosummary',
-    'sphinx.ext.intersphinx',
-    'sphinx_rtd_theme',
-    'sphinx_mdinclude',
-    'sphinxcontrib.bibtex',
+    "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.intersphinx",
+    "sphinx_rtd_theme",
+    "sphinx_mdinclude",
+    "sphinxcontrib.bibtex",
 ]
 
 # bibtex configuration
-bibtex_bibfiles = ['refs.bib']
-bibtex_default_style = 'plain'
+bibtex_bibfiles = ["refs.bib"]
+bibtex_default_style = "plain"
 numfig = True
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'README.md']
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "README.md"]
 
 # The name of the Pygments (syntax highlighting) style to use.
 # pygments_style = 'friendly'
@@ -71,7 +72,7 @@ autodoc_class_signature = "separated"
 # Don't show the module name.
 add_module_names = False
 
-autodoc_default_flags = ['members']
+autodoc_default_flags = ["members"]
 autosummary_generate = True
 
 
@@ -80,29 +81,29 @@ autosummary_generate = True
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
+html_theme = "sphinx_rtd_theme"
 html_theme_options = {
-    'logo_only': True,
-    'display_version': True,
+    "logo_only": True,
+    "display_version": True,
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = ["_static"]
 
 html_css_files = [
-    'css/custom.css',
+    "css/custom.css",
 ]
 
-html_logo = '_images/logo.png'
+html_logo = "_images/logo.png"
 
 html_copy_source = False
 
 # configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/{.major}'.format(sys.version_info), None),
-    'matplotlib': ('https://matplotlib.org/stable/', None),
-    'pandas': ('https://pandas.pydata.org/docs/', None),
-    'numpy': ('https://numpy.org/doc/stable/', None),
+    "python": (f"https://docs.python.org/{sys.version_info.major}", None),
+    "matplotlib": ("https://matplotlib.org/stable/", None),
+    "pandas": ("https://pandas.pydata.org/docs/", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
 }

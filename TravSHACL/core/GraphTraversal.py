@@ -1,13 +1,13 @@
-# -*- coding: utf-8 -*-
-__author__ = 'Philipp D. Rohde'
+__author__ = "Philipp D. Rohde"
 
 from enum import Enum
 
 
 class GraphTraversal(Enum):
     """This enum is used to specify the algorithm used for graph traversal."""
-    BFS = 'Breadth-first search'
-    DFS = 'Depth-first search'
+
+    BFS = "Breadth-first search"
+    DFS = "Depth-first search"
 
     def traverse_graph(self, dependencies, reversed_dependencies, starting_point, one_component=False):
         nodes = list(dependencies.keys())
@@ -65,7 +65,7 @@ class GraphTraversal(Enum):
     @staticmethod
     def _edges(dependencies, reversed_dependencies):
         edges = {}
-        for k in dependencies.keys():
+        for k in dependencies:
             edges[k] = []
             edges[k].extend(dependencies[k])
             edges[k].extend(reversed_dependencies[k])

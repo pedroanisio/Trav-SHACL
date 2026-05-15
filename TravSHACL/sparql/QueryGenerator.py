@@ -1,15 +1,14 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
-__author__ = 'Monica Figuera and Philipp D. Rohde'
+__author__ = "Monica Figuera and Philipp D. Rohde"
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from TravSHACL.core.Shape import Shape
 
-from TravSHACL.utils.VariableGenerator import VariableGenerator
 from TravSHACL.core.RulePattern import RulePattern
+from TravSHACL.utils.VariableGenerator import VariableGenerator
 
 
 def get_target_node_statement(target_query):
@@ -19,8 +18,8 @@ def get_target_node_statement(target_query):
     :param target_query: complete SPARQL query
     :return: query body of the given SPARQL query
     """
-    start = target_query.index('{') + len('{')
-    end = target_query.rfind('}')
+    start = target_query.index("{") + len("{")
+    end = target_query.rfind("}")
     return target_query[start:end]
 
 
@@ -78,11 +77,12 @@ class QueryGenerator:
         """
         if target_query is None:
             return None
-        if type_ == 'plain_target':
+        if type_ == "plain_target":
             return self._plain_target_query(target_query, include_prefixes, include_order_by)
-        elif type_ == 'template_FILTER':
-            return self._target_query_filter(ref_constraint, target_query, include_prefixes, include_order_by, True), \
-                   self._target_query_filter(ref_constraint, target_query, include_prefixes, include_order_by, False)
+        elif type_ == "template_FILTER":
+            return self._target_query_filter(
+                ref_constraint, target_query, include_prefixes, include_order_by, True
+            ), self._target_query_filter(ref_constraint, target_query, include_prefixes, include_order_by, False)
 
     def _plain_target_query(self, target_query, include_prefixes, include_order_by):
         """
@@ -93,11 +93,9 @@ class QueryGenerator:
         :param include_order_by: indicates whether the ORDER BY clause will be added
         :return: simple target query
         """
-        prefixes = self.shape.get_prefix_string() if include_prefixes else ''
+        prefixes = self.shape.get_prefix_string() if include_prefixes else ""
         focus_var = VariableGenerator.get_focus_node_var()
-        return ''.join([prefixes,
-                        target_query,
-                        ' ORDER BY ?' + focus_var if include_order_by else ''])
+        return "".join([prefixes, target_query, " ORDER BY ?" + focus_var if include_order_by else ""])
 
     def _target_query_filter(self, constraint, target_query, include_prefixes, include_order_by, filter_by_valid=True):
         """
@@ -110,21 +108,31 @@ class QueryGenerator:
         :param: filter_by_valid: indicates whether valid instances will be used for filtering or invalid ones
         :return: target query with VALUES clause
         """
-        prefixes = self.shape.get_prefix_string() if include_prefixes else ''
+        prefixes = self.shape.get_prefix_string() if include_prefixes else ""
         ref_path = constraint[0].path_sparql()
         focus_var = VariableGenerator.get_focus_node_var()
         target_node = get_target_node_statement(target_query)
-        count = '(COUNT(DISTINCT ?inst) AS ?cnt)' if filter_by_valid else '((COUNT(DISTINCT ?inst2) - COUNT(DISTINCT ?inst)) AS ?cnt)'
-        additional_triple_pattern = '  OPTIONAL { ?' + focus_var + ' ' + ref_path + ' ?inst2 . }\n' if not filter_by_valid else ''
-        query = ''.join([
-            prefixes,
-            'SELECT DISTINCT ?' + focus_var + ' ' + count + ' WHERE {\n ',
-            target_node + '\n',
-            additional_triple_pattern,
-            '  OPTIONAL {\n', '    VALUES ?inst { $instances_to_add$ }. \n',
-            '    ?' + focus_var + ' ' + ref_path + ' ?inst .\n  }\n',
-            '}\nGROUP BY ?' + focus_var, '\nORDER BY ?' + focus_var if include_order_by else ''
-        ])
+        count = (
+            "(COUNT(DISTINCT ?inst) AS ?cnt)"
+            if filter_by_valid
+            else "((COUNT(DISTINCT ?inst2) - COUNT(DISTINCT ?inst)) AS ?cnt)"
+        )
+        additional_triple_pattern = (
+            "  OPTIONAL { ?" + focus_var + " " + ref_path + " ?inst2 . }\n" if not filter_by_valid else ""
+        )
+        query = "".join(
+            [
+                prefixes,
+                "SELECT DISTINCT ?" + focus_var + " " + count + " WHERE {\n ",
+                target_node + "\n",
+                additional_triple_pattern,
+                "  OPTIONAL {\n",
+                "    VALUES ?inst { $instances_to_add$ }. \n",
+                "    ?" + focus_var + " " + ref_path + " ?inst .\n  }\n",
+                "}\nGROUP BY ?" + focus_var,
+                "\nORDER BY ?" + focus_var if include_order_by else "",
+            ]
+        )
         return Query(None, None, query)
 
     # CONSTRAINT QUERIES #
@@ -139,13 +147,13 @@ class QueryGenerator:
         :param include_order_by: indicates whether or not the ORDER BY clause will be added
         :return: target query with VALUES clause
         """
-        prefixes = self.shape.get_prefix_string() if include_prefixes else ''
+        prefixes = self.shape.get_prefix_string() if include_prefixes else ""
         focus_var = VariableGenerator.get_focus_node_var()
         target_node = get_target_node_statement(target_query)
-        query_top = ''.join([prefixes, " SELECT DISTINCT ?" + focus_var + " WHERE {\n"])
-        query_down = " ORDER BY ?" + focus_var if include_order_by else ''
+        query_top = "".join([prefixes, " SELECT DISTINCT ?" + focus_var + " WHERE {\n"])
+        query_down = " ORDER BY ?" + focus_var if include_order_by else ""
         or_union = self.get_or_query(constraint, target_node)
-        return query_top + or_union + '}' + query_down
+        return query_top + or_union + "}" + query_down
 
     @staticmethod
     def get_or_query(constraints_, target_node_statement):
@@ -158,11 +166,11 @@ class QueryGenerator:
         """
         or_constraints = [c for c in constraints_ if c.get_shape_ref() is None]  # unsure validity with 'get_shape_ref'
 
-        builder = QueryBuilder('tmp', None, VariableGenerator.get_focus_node_var(), False)
+        builder = QueryBuilder("tmp", None, VariableGenerator.get_focus_node_var(), False)
         or_value = 1  # used for differentiating between the constraints of different options of each or_operation
         for c in or_constraints:
             if c.options:
-                or_affix = 1   # not in use yet but can be used if there are more than one constraint in an or_option
+                or_affix = 1  # not in use yet but can be used if there are more than one constraint in an or_option
                 for option in c.options:
                     if option.is_max_only_constraint():
                         builder.build_clause(option, or_value, or_affix, True)
@@ -172,8 +180,9 @@ class QueryGenerator:
                 or_value += 1
         return builder.build_union(target_node_statement, VariableGenerator.get_focus_node_var())
 
-    def generate_query(self, id_, constraints, is_selective, target_query,
-                       include_prefixes, include_order_by, subquery=None):
+    def generate_query(
+        self, id_, constraints, is_selective, target_query, include_prefixes, include_order_by, subquery=None
+    ):
         """
         Generates a constraint query.
 
@@ -187,8 +196,16 @@ class QueryGenerator:
         :return: the generated constraint query
         """
         rp = self.compute_rule_pattern(constraints, id_)
-        builder = QueryBuilder(id_, subquery, rp.variables, is_selective, target_query,
-                               constraints, include_order_by, self.shape.get_prefix_string())
+        builder = QueryBuilder(
+            id_,
+            subquery,
+            rp.variables,
+            is_selective,
+            target_query,
+            constraints,
+            include_order_by,
+            self.shape.get_prefix_string(),
+        )
         for c in constraints:
             builder.build_clause(c)
         return builder.build_query(rp, include_prefixes)
@@ -206,10 +223,7 @@ class QueryGenerator:
         for c in constraints:
             body = body + c.compute_rule_pattern_body()
 
-        return RulePattern(
-            head=(id_, VariableGenerator.get_focus_node_var(), True),
-            body=body
-        )
+        return RulePattern(head=(id_, VariableGenerator.get_focus_node_var(), True), body=body)
 
     @staticmethod
     def generate_local_subquery(positive_constraints):
@@ -224,7 +238,7 @@ class QueryGenerator:
         if len(local_pos_constraints) == 0:
             return None  # optional empty
 
-        builder = QueryBuilder('tmp', None, VariableGenerator.get_focus_node_var(), False)
+        builder = QueryBuilder("tmp", None, VariableGenerator.get_focus_node_var(), False)
 
         for c in local_pos_constraints:
             builder.build_clause(c)
@@ -234,8 +248,17 @@ class QueryGenerator:
 class QueryBuilder:
     """This class is responsible for actually building SPARQL queries for constraints."""
 
-    def __init__(self, id_, subquery, projected_variables, is_selective, target_query=None,
-                 constraints=None, include_order_by: bool = False, prefix_string: str = ''):
+    def __init__(
+        self,
+        id_,
+        subquery,
+        projected_variables,
+        is_selective,
+        target_query=None,
+        constraints=None,
+        include_order_by: bool = False,
+        prefix_string: str = "",
+    ):
         """
         Creates a new instance of QueryBuilder.
 
@@ -251,16 +274,16 @@ class QueryBuilder:
         self.id = id_
         self.subquery = subquery
         self.projected_variables = projected_variables
-        self.filters = []
-        self.triples = []
-        self.union_triples = []
-        self.max_dict = {}
+        self.filters: list[str] = []
+        self.triples: list[str] = []
+        self.union_triples: list[str] = []
+        self.max_dict: dict[str, Any] = {}
 
         self.include_selectivity = is_selective
         self.target_query = target_query
         self.constraints = constraints
         self.include_ORDERBY = include_order_by
-        self.inter_shape_refs = {}
+        self.inter_shape_refs: dict[str, Any] = {}
         self.prefix_string = prefix_string
 
     def add_triple(self, path, obj):
@@ -271,7 +294,7 @@ class QueryBuilder:
         :param path: predicate of the triple pattern
         :param obj: object of the triple pattern
         """
-        self.triples.append('?' + VariableGenerator.get_focus_node_var() + ' ' + path + ' ' + obj + '.')
+        self.triples.append("?" + VariableGenerator.get_focus_node_var() + " " + path + " " + obj + ".")
 
     def add_union_triples(self, path, obj, val_1, val_2, maxonly: bool = False, card: int = -1):
         """
@@ -286,24 +309,55 @@ class QueryBuilder:
         :param card: cardinality restriction of the constraint to be added
         """
         if maxonly:
-            self.union_triples.append(str(val_1) + '#' + str(val_2) + '#max#' + str(card) + '#?' +
-                                      VariableGenerator.get_focus_node_var() + ' ' + path + ' ' + obj + '.')
+            self.union_triples.append(
+                str(val_1)
+                + "#"
+                + str(val_2)
+                + "#max#"
+                + str(card)
+                + "#?"
+                + VariableGenerator.get_focus_node_var()
+                + " "
+                + path
+                + " "
+                + obj
+                + "."
+            )
         else:
-            self.union_triples.append(str(val_1) + '#' + str(val_2) + '#min#' + str(card) + '#?' +
-                                      VariableGenerator.get_focus_node_var() + ' ' + path + ' ' + obj + '.')
+            self.union_triples.append(
+                str(val_1)
+                + "#"
+                + str(val_2)
+                + "#min#"
+                + str(card)
+                + "#?"
+                + VariableGenerator.get_focus_node_var()
+                + " "
+                + path
+                + " "
+                + obj
+                + "."
+            )
 
     def union_with_filters(self, union_list):
         union_list_to_keep = []
         for filter_ in self.filters:
             filter_union = []
             for entry in union_list:
-                if entry.rsplit(' ', 1)[1].split('.')[0] in filter_:
+                if entry.rsplit(" ", 1)[1].split(".")[0] in filter_:
                     filter_union.append(entry)
                 else:
                     union_list_to_keep.append(entry)
             if filter_union:
-                union_list_to_keep.append('{' + self.__get_projection_string() + ' WHERE {\n' + '\n'.join(filter_union)
-                                          + '\nFILTER( \n' + filter_ + ') \n }}')
+                union_list_to_keep.append(
+                    "{"
+                    + self.__get_projection_string()
+                    + " WHERE {\n"
+                    + "\n".join(filter_union)
+                    + "\nFILTER( \n"
+                    + filter_
+                    + ") \n }}"
+                )
         return union_list_to_keep
 
     def build_union(self, target_node_statement: str, focus_node_var: str):
@@ -312,25 +366,39 @@ class QueryBuilder:
         No subject is needed as in a constraint query all triple patterns share the same subject.
 
         """
-        if self.union_triples is []:
+        if self.union_triples == []:
             return
         else:
             grouping = []
             for entry in self.union_triples:
-                group_number = entry.split('#', 3)[0]
+                group_number = entry.split("#", 3)[0]
                 if group_number not in grouping:
                     grouping.append(group_number)
 
             for group in grouping:
                 current_group = []
                 for entry in self.union_triples:
-                    if entry.split('#', 3)[0] == group:
-                        if entry.split('#', 3)[2] == 'min':
-                            current_group.append(self.cardinality_graph_pattern(target_node_statement, focus_node_var,
-                                                           entry.split('#', 4)[4], False, entry.split('#', 4)[3]))
-                        if entry.split('#', 3)[2] == 'max':
-                            current_group.append(self.cardinality_graph_pattern(target_node_statement, focus_node_var,
-                                                           entry.split('#', 4)[4], True, entry.split('#', 4)[3]))
+                    if entry.split("#", 3)[0] == group:
+                        if entry.split("#", 3)[2] == "min":
+                            current_group.append(
+                                self.cardinality_graph_pattern(
+                                    target_node_statement,
+                                    focus_node_var,
+                                    entry.split("#", 4)[4],
+                                    False,
+                                    int(entry.split("#", 4)[3]),
+                                )
+                            )
+                        if entry.split("#", 3)[2] == "max":
+                            current_group.append(
+                                self.cardinality_graph_pattern(
+                                    target_node_statement,
+                                    focus_node_var,
+                                    entry.split("#", 4)[4],
+                                    True,
+                                    int(entry.split("#", 4)[3]),
+                                )
+                            )
                         # self.triples.remove(entry.split('#', 2)[2])
                     # entry.split('#', 2)[1] can be used for grouping if there are more than just the path constraint
                 # print(current_group)
@@ -338,11 +406,12 @@ class QueryBuilder:
                     current_group = self.union_with_filters(current_group)
 
                 self.triples.append(self.union_group(current_group))
-        return '\n'.join(self.triples)
+        return "\n".join(self.triples)
 
     @staticmethod
-    def cardinality_graph_pattern(target_node_statement: str, focus_node_var: str,
-                                  triple_pattern: str, max_: bool, card: int):
+    def cardinality_graph_pattern(
+        target_node_statement: str, focus_node_var: str, triple_pattern: str, max_: bool, card: int
+    ):
         """
         Creates a subquery for cardinality constraints to be used in OR constraints.
 
@@ -352,17 +421,23 @@ class QueryBuilder:
         :param max_: Indicates whether the constraint is a max cardinality constraint
         :param card: The cardinality restriction of the constraint
         """
-        cgp = '{ SELECT DISTINCT ?' + focus_node_var + ' WHERE {\n' + target_node_statement + ' .\n'
+        cgp = "{ SELECT DISTINCT ?" + focus_node_var + " WHERE {\n" + target_node_statement + " .\n"
         if max_:
-            cgp += 'OPTIONAL { ' + triple_pattern + '}'
+            cgp += "OPTIONAL { " + triple_pattern + "}"
         else:
             cgp += triple_pattern
-        cgp += '\n}\nGROUP BY ?' + focus_node_var + '\nHAVING (COUNT(DISTINCT ?' + triple_pattern.split('?', 2)[2][:-1] + ') '
+        cgp += (
+            "\n}\nGROUP BY ?"
+            + focus_node_var
+            + "\nHAVING (COUNT(DISTINCT ?"
+            + triple_pattern.split("?", 2)[2][:-1]
+            + ") "
+        )
         if max_:
-            cgp += '<= '
+            cgp += "<= "
         else:
-            cgp += '>= '
-        cgp += str(card) + ') }'
+            cgp += ">= "
+        cgp += str(card) + ") }"
         return cgp
 
     @staticmethod
@@ -372,7 +447,7 @@ class QueryBuilder:
 
         :param triples_to_join: list containing triples that should observe unions
         """
-        return '\n UNION \n'.join(triples_to_join)
+        return "\n UNION \n".join(triples_to_join)
 
     def add_datatype_filter(self, variable, datatype, is_pos):
         """
@@ -382,8 +457,8 @@ class QueryBuilder:
         :param datatype: the expected datatype
         :param is_pos: indicated whether this is a positive constraint
         """
-        s = 'datatype(?' + variable + ') = ' + datatype
-        self.filters.append(s if is_pos else '!(' + s + ')')
+        s = "datatype(?" + variable + ") = " + datatype
+        self.filters.append(s if is_pos else "!(" + s + ")")
 
     def add_constant_filter(self, variable, constant, is_pos):
         """
@@ -393,8 +468,8 @@ class QueryBuilder:
         :param constant: the constant value the variable should be assigned
         :param is_pos: indicated whether this is a positive constraint
         """
-        s = variable + ' = ' + constant
-        self.filters.append(s if is_pos else '!(' + s + ')')
+        s = variable + " = " + constant
+        self.filters.append(s if is_pos else "!(" + s + ")")
 
     def get_sparql(self, include_prefixes, is_subquery):
         """
@@ -407,46 +482,77 @@ class QueryBuilder:
         if is_subquery:
             return self.__get_query(False)  # create subquery
 
-        prefixes = self.prefix_string if include_prefixes else ''
-        if isinstance(self.subquery, str):
-            if self.subquery == '':
-                self.subquery = None
-        outer_query_closing_braces = ''.join(['}\n' if self.subquery is not None else '',
-                                              '}' if self.get_triple_patterns() != '' and self.subquery is not None else '',
-                                              '}' if self.get_triple_patterns() != '' else ''])
+        prefixes = self.prefix_string if include_prefixes else ""
+        if isinstance(self.subquery, str) and self.subquery == "":
+            self.subquery = None
+        outer_query_closing_braces = "".join(
+            [
+                "}\n" if self.subquery is not None else "",
+                "}" if self.get_triple_patterns() != "" and self.subquery is not None else "",
+                "}" if self.get_triple_patterns() != "" else "",
+            ]
+        )
 
-        selective_closing_braces = '}}' if self.include_selectivity and self.target_query is not None else ''
+        selective_closing_braces = "}}" if self.include_selectivity and self.target_query is not None else ""
 
-        if len(self.constraints) == 1 and self.constraints[0].is_max_only_constraint() and self.constraints[0].get_shape_ref() is None:
-            target_node = ''
+        if (
+            len(self.constraints) == 1
+            and self.constraints[0].is_max_only_constraint()
+            and self.constraints[0].get_shape_ref() is None
+        ):
+            target_node = ""
             if self.include_selectivity and self.target_query is not None:
-                target_node = get_target_node_statement(self.target_query) + '.\n'
+                target_node = get_target_node_statement(self.target_query) + ".\n"
 
             if self.constraints[0].get_value() is not None:
                 pred = self.constraints[0].path_sparql()
                 obj = self.constraints[0].get_value()
-                return ''.join([prefixes,
-                                self.__get_projection_string(),
-                                ' WHERE {\n', target_node,
-                                '?', VariableGenerator.get_focus_node_var(), ' ', pred, ' ', obj, '.\n}',
-                                ' ORDER BY ?' + VariableGenerator.get_focus_node_var() if self.include_ORDERBY else ''])
+                return "".join(
+                    [
+                        prefixes,
+                        self.__get_projection_string(),
+                        " WHERE {\n",
+                        target_node,
+                        "?",
+                        VariableGenerator.get_focus_node_var(),
+                        " ",
+                        pred,
+                        " ",
+                        obj,
+                        ".\n}",
+                        " ORDER BY ?" + VariableGenerator.get_focus_node_var() if self.include_ORDERBY else "",
+                    ]
+                )
             else:
                 if self.triples:
-                    return ''.join([prefixes,
-                                    self.__get_projection_string(),
-                                    ' WHERE {\n', target_node,
-                                    self.triples[0], '\n} GROUP BY ?',
-                                    VariableGenerator.get_focus_node_var(),
-                                    ' HAVING (COUNT(DISTINCT ?', self.triples[0].rsplit('?', 1)[1][:-1], ') >= ',
-                                    str(self.constraints[0].max + 1), ')',
-                                    ' ORDER BY ?' + VariableGenerator.get_focus_node_var() if self.include_ORDERBY else ''])
-        query = ''.join([prefixes,
-                         self.__get_selective(),
-                         self.__get_query(include_prefixes),
-                         self.subquery if self.subquery is not None else '',
-                         outer_query_closing_braces,
-                         selective_closing_braces,
-                         ' ORDER BY ?' + VariableGenerator.get_focus_node_var() if self.include_ORDERBY else ''])
+                    return "".join(
+                        [
+                            prefixes,
+                            self.__get_projection_string(),
+                            " WHERE {\n",
+                            target_node,
+                            self.triples[0],
+                            "\n} GROUP BY ?",
+                            VariableGenerator.get_focus_node_var(),
+                            " HAVING (COUNT(DISTINCT ?",
+                            self.triples[0].rsplit("?", 1)[1][:-1],
+                            ") >= ",
+                            str(self.constraints[0].max + 1),
+                            ")",
+                            " ORDER BY ?" + VariableGenerator.get_focus_node_var() if self.include_ORDERBY else "",
+                        ]
+                    )
+        query = "".join(
+            [
+                prefixes,
+                self.__get_selective(),
+                self.__get_query(include_prefixes),
+                self.subquery if self.subquery is not None else "",
+                outer_query_closing_braces,
+                selective_closing_braces,
+                " ORDER BY ?" + VariableGenerator.get_focus_node_var() if self.include_ORDERBY else "",
+            ]
+        )
         return query
 
     def __get_query(self, include_prefixes):
@@ -456,24 +562,27 @@ class QueryBuilder:
         :param include_prefixes: indicates whether prefixes should be included in the query
         :return: the SPARQL query as a string
         """
-        temp_string = ''
-        if include_prefixes:
-            if '_pos' in self.id or '_max_' in self.id:
-                # add VALUES clause to external query
-                temp_string = '$filter_clause_to_add$'
+        temp_string = ""
+        if include_prefixes and ("_pos" in self.id or "_max_" in self.id):
+            # add VALUES clause to external query
+            temp_string = "$filter_clause_to_add$"
 
         triple_patterns = self.get_triple_patterns()
-        if isinstance(self.subquery, str):
-            if self.subquery == '':
-                self.subquery = None
-        if triple_patterns != '':
-            return ''.join([self.__get_projection_string(),
-                            ' WHERE {\n',
-                            temp_string,
-                            triple_patterns,
-                            '\n', '{\n' if self.subquery is not None else ''])
+        if isinstance(self.subquery, str) and self.subquery == "":
+            self.subquery = None
+        if triple_patterns != "":
+            return "".join(
+                [
+                    self.__get_projection_string(),
+                    " WHERE {\n",
+                    temp_string,
+                    triple_patterns,
+                    "\n",
+                    "{\n" if self.subquery is not None else "",
+                ]
+            )
         else:
-            return ''
+            return ""
 
     def __get_selective(self):
         """
@@ -483,10 +592,8 @@ class QueryBuilder:
         """
         if self.include_selectivity and self.target_query is not None:
             target_node = get_target_node_statement(self.target_query)
-            return ''.join([self.__get_projection_string(),
-                            ' WHERE {\n',
-                            target_node + '. {\n'])
-        return ''
+            return "".join([self.__get_projection_string(), " WHERE {\n", target_node + ". {\n"])
+        return ""
 
     def __get_projection_string(self):
         """
@@ -494,7 +601,7 @@ class QueryBuilder:
 
         :return: the SELECT clause of the query to be built
         """
-        return 'SELECT DISTINCT ' + ' '.join(['?' + v for v in self.projected_variables])
+        return "SELECT DISTINCT " + " ".join(["?" + v for v in self.projected_variables])
 
     def get_triple_patterns(self):
         """
@@ -502,7 +609,7 @@ class QueryBuilder:
 
         :return: all triple patterns of the query
         """
-        triple_string = '\n'.join(self.triples)
+        triple_string = "\n".join(self.triples)
 
         if len(self.filters) == 0:
             return triple_string
@@ -516,9 +623,9 @@ class QueryBuilder:
         :return: a string for the filters to be applied
         """
         if len(self.filters) == 0:
-            return ''
+            return ""
 
-        return '\nFILTER(\n' + (self.filters[0] if len(self.filters) == 1 else ' &&\n'.join(self.filters)) + ')'
+        return "\nFILTER(\n" + (self.filters[0] if len(self.filters) == 1 else " &&\n".join(self.filters)) + ")"
 
     def add_cardinality_filter(self, variables):
         """
@@ -528,7 +635,7 @@ class QueryBuilder:
         """
         for i in range(0, len(variables)):
             for j in range(i + 1, len(variables)):
-                self.filters.append('?' + variables[i] + ' != ?' + variables[j])
+                self.filters.append("?" + variables[i] + " != ?" + variables[j])
 
     def build_clause(self, c, or_value: int = 0, or_affix: int = 0, maxonly: bool = False):
         """
@@ -554,9 +661,5 @@ class QueryBuilder:
                 max_zero_query = True
 
         return Query(
-            self.id,
-            rule_pattern,
-            self.get_sparql(include_prefixes, False),
-            self.inter_shape_refs,
-            max_zero_query
+            self.id, rule_pattern, self.get_sparql(include_prefixes, False), self.inter_shape_refs, max_zero_query
         )

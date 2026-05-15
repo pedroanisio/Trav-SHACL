@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations  # required for typing in older versions of Python
 
-__author__ = 'Philipp D. Rohde and Monica Figuera'
+__author__ = "Philipp D. Rohde and Monica Figuera"
 
 import warnings
 
@@ -17,12 +16,24 @@ from TravSHACL.utils import parse_heuristics
 class ShapeSchema:
     """This class represents a SHACL shape schema."""
 
-    def __init__(self, *, schema_dir: str | Graph, schema_format: str = 'SHACL', endpoint: str | Graph,
-                 endpoint_user: str = None, endpoint_password: str = None,
-                 graph_traversal: GraphTraversal = GraphTraversal.DFS, heuristics: dict = parse_heuristics("TARGET IN BIG"),
-                 use_selective_queries: bool = True, max_split_size: int = 256, output_dir: str = None,
-                 order_by_in_queries: bool = False, save_outputs: bool = False, work_in_parallel: bool = False,
-                 ignore_parsing_errors: bool = False):
+    def __init__(
+        self,
+        *,
+        schema_dir: str | Graph,
+        schema_format: str = "SHACL",
+        endpoint: str | Graph,
+        endpoint_user: str | None = None,
+        endpoint_password: str | None = None,
+        graph_traversal: GraphTraversal = GraphTraversal.DFS,
+        heuristics: dict | None = None,
+        use_selective_queries: bool = True,
+        max_split_size: int = 256,
+        output_dir: str | None = None,
+        order_by_in_queries: bool = False,
+        save_outputs: bool = False,
+        work_in_parallel: bool = False,
+        ignore_parsing_errors: bool = False,
+    ):
         """
         Creates a new shape schema instance.
 
@@ -43,10 +54,11 @@ class ShapeSchema:
         :param work_in_parallel: indicates whether parallelization will be used; not yet implemented; default: False
         :param ignore_parsing_errors: whether to ignore parsing errors; default: False
         """
-        if schema_format == 'JSON':
+        if schema_format == "JSON":
             warnings.warn(
-                'The JSON format for shape schemas is deprecated and will be removed in a future version.',
-                DeprecationWarning, 2
+                "The JSON format for shape schemas is deprecated and will be removed in a future version.",
+                DeprecationWarning,
+                2,
             )
         if isinstance(schema_dir, Graph):
             self.shapes = ShapeParser(ignore_errors=ignore_parsing_errors).parse_ttl(
@@ -62,7 +74,7 @@ class ShapeSchema:
         self.parallel = work_in_parallel  # TODO: no parallelization implemented yet
         self.dependencies, self.reverse_dependencies = self.compute_edges()
         self.compute_in_and_outdegree()
-        self.heuristics = heuristics
+        self.heuristics = heuristics if heuristics is not None else parse_heuristics("TARGET IN BIG")
         self.outputDirName = output_dir
         self.selectivityEnabled = use_selective_queries
         self.saveStats = output_dir is not None
@@ -79,33 +91,33 @@ class ShapeSchema:
         possible_starting_points = []
 
         # heuristic 1: target definition available
-        if self.heuristics['target']:
+        if self.heuristics["target"]:
             for s in self.shapes:
                 if s.targetDef is not None:
                     possible_starting_points.append(s)
 
         # heuristic 2: in- and outdegree
-        if self.heuristics['degree'] == 'in':
+        if self.heuristics["degree"] == "in":
             # prioritize indegree
             possible_starting_points = possible_starting_points if possible_starting_points else self.shapes
             possible_starting_points = self.__indegree(possible_starting_points)
-        elif self.heuristics['degree'] == 'out':
+        elif self.heuristics["degree"] == "out":
             # prioritize outdegree
             possible_starting_points = possible_starting_points if possible_starting_points else self.shapes
             possible_starting_points = self.__outdegree(possible_starting_points)
-        elif self.heuristics['degree'] == 'inout':
+        elif self.heuristics["degree"] == "inout":
             # prioritize indegree and further filter by outdegree
             possible_starting_points = possible_starting_points if possible_starting_points else self.shapes
             possible_starting_points = self.__indegree(possible_starting_points)
             possible_starting_points = self.__outdegree(possible_starting_points)
-        elif self.heuristics['degree'] == 'outin':
+        elif self.heuristics["degree"] == "outin":
             # prioritize outdegree and further filter by indegree
             possible_starting_points = possible_starting_points if possible_starting_points else self.shapes
             possible_starting_points = self.__outdegree(possible_starting_points)
             possible_starting_points = self.__indegree(possible_starting_points)
 
         # heuristic 3: number of properties
-        if self.heuristics['properties'] == 'small':
+        if self.heuristics["properties"] == "small":
             possible_starting_points = possible_starting_points if possible_starting_points else self.shapes
             if len(possible_starting_points) > 1:
                 min_con = min([s.get_number_constraints() for s in possible_starting_points])
@@ -114,7 +126,7 @@ class ShapeSchema:
                     if s.get_number_constraints() == min_con:
                         tmp.append(s)
                 possible_starting_points = tmp
-        elif self.heuristics['properties'] == 'big':
+        elif self.heuristics["properties"] == "big":
             if len(possible_starting_points) > 1:
                 max_con = max([s.get_number_constraints() for s in possible_starting_points])
                 tmp = []
@@ -124,7 +136,7 @@ class ShapeSchema:
                 possible_starting_points = tmp
 
         if not possible_starting_points:
-            raise ValueError('Cannot determine a starting shape: no parsed shape has a target definition.')
+            raise ValueError("Cannot determine a starting shape: no parsed shape has a target definition.")
         return [s.get_id() for s in possible_starting_points]
 
     @staticmethod
@@ -161,13 +173,16 @@ class ShapeSchema:
     def validate(self):
         """Executes the validation of the shape network."""
         start = self.get_starting_point()
-        node_order = self.graphTraversal.traverse_graph(self.dependencies, self.reverse_dependencies, start[0])  # TODO: deal with more than one possible starting point
+        node_order = self.graphTraversal.traverse_graph(
+            self.dependencies, self.reverse_dependencies, start[0]
+        )  # TODO: deal with more than one possible starting point
 
         for s in self.shapes:
             s.compute_constraint_queries()
 
-        target_shapes = [s for name, s in self.shapesDict.items()
-                         if self.shapesDict[name].get_target_query() is not None]
+        target_shapes = [
+            s for name, s in self.shapesDict.items() if self.shapesDict[name].get_target_query() is not None
+        ]
         target_shape_predicates = [s.get_id() for s in target_shapes]
 
         return Validation(
@@ -178,7 +193,7 @@ class ShapeSchema:
             self.selectivityEnabled,
             self.outputDirName,
             self.saveStats,
-            self.saveTargetsToFile
+            self.saveTargetsToFile,
         ).exec()
         # return 'Go to log files in {} folder to see report'.format(self.outputDirName)
 
@@ -186,8 +201,8 @@ class ShapeSchema:
         """Computes the in- and outdegree of each shape."""
         for s in self.shapes:
             s.set_degree(
-                in_=len(self.reverse_dependencies[s.get_id()]) if s.get_id() in self.reverse_dependencies.keys() else 0,
-                out_=len(self.dependencies[s.get_id()]) if s.get_id() in self.dependencies.keys() else 0
+                in_=len(self.reverse_dependencies[s.get_id()]) if s.get_id() in self.reverse_dependencies else 0,
+                out_=len(self.dependencies[s.get_id()]) if s.get_id() in self.dependencies else 0,
             )
         return
 

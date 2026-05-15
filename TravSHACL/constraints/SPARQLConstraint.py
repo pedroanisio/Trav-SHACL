@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-__author__ = 'Philipp D. Rohde'
+__author__ = "Philipp D. Rohde"
 
 from TravSHACL.constraints.Constraint import Constraint
 
@@ -7,7 +6,7 @@ from TravSHACL.constraints.Constraint import Constraint
 class SPARQLConstraint(Constraint):
     """This class represents max constraints, i.e., a constraint for the maximal occurrence of a path."""
 
-    def __init__(self, id_, is_pos, query: str = None):
+    def __init__(self, id_, is_pos, query: str | None = None):
         """
         Creates a new SPARQL constraint.
 

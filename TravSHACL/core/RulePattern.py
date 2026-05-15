@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-__author__ = 'Monica Figuera'
+__author__ = "Monica Figuera"
 
 
 class RulePattern:
@@ -11,7 +10,7 @@ class RulePattern:
         self.__variables = set([head[1]] + [a[1] for a in body if a is not None])
 
     def __repr__(self):
-        return '[' + str(self.head) + '] <-- ' + str(self.body)
+        return "[" + str(self.head) + "] <-- " + str(self.body)
 
     @property
     def head(self):
