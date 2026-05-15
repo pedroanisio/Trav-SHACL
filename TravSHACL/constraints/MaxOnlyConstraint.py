@@ -32,3 +32,6 @@ class MaxOnlyConstraint(Constraint):
         """Computes variable names for the SPARQL queries of the constraint."""
         atomic_constraint = Constraint()
         return atomic_constraint.generate_variables(self.varGenerator, VariableType.VALIDATION, self.max + 1)
+
+    def is_max_only_constraint(self):
+        return True

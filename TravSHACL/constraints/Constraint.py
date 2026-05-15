@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Monica Figuera and Philipp D. Rohde'
 
+from TravSHACL.core.Path import PathExpression
+
 
 class Constraint:
     """Base class for all constraints."""
@@ -30,7 +32,7 @@ class Constraint:
         self.target = target_def
 
         self.variables = []
-        self.path = path
+        self.path = None if path is None else PathExpression.from_string(path)
         self.severity = None
         self.name = None
         self.description = None
@@ -73,6 +75,59 @@ class Constraint:
 
     def get_options(self):
         return self.options
+
+    def path_sparql(self):
+        return None if self.path is None else self.path.to_sparql()
+
+    def is_sparql_constraint(self):
+        return False
+
+    def is_max_only_constraint(self):
+        return False
+
+    def emit_filter(self, builder, focus_var, or_value: int = 0, or_affix: int = 0, maxonly: bool = False):
+        """
+        Adds the necessary triples and filters for this constraint to a QueryBuilder.
+
+        :param builder: query builder receiving triple patterns and filters
+        :param focus_var: focus node variable name
+        :param or_value: used in the case of multiple 'or' for triple grouping
+        :param or_affix: used in the case of more than one or triple within an option in an 'or' operation
+        :param maxonly: whether to emit the OR-specific max-cardinality representation
+        """
+        variables = self.get_variables()
+        path = self.path_sparql()
+        if path is None:
+            return
+
+        if maxonly:
+            v = variables[0]
+            builder.add_union_triples(path, '?' + v, or_value, or_affix, True, card=self.max)
+            return
+
+        if self.get_value() is not None:
+            if or_value > 0:
+                builder.add_union_triples(path, self.get_value(), or_value, or_affix)
+            else:
+                builder.add_triple(path, self.get_value())
+            return
+
+        if or_value > 0:
+            v = variables[0]
+            builder.add_union_triples(path, '?' + v, or_value, or_affix, card=self.min)
+        else:
+            for v in variables:
+                if self.get_shape_ref() is not None:
+                    builder.inter_shape_refs[v] = self.get_shape_ref()
+                    builder.triples.append('\n$inter_shape_type_to_add$')
+                builder.add_triple(path, '?' + v)
+
+        if self.get_datatype() is not None:
+            for v in variables:
+                builder.add_datatype_filter(v, self.get_datatype(), self.get_is_pos())
+
+        if len(variables) > 1 and or_value == 0:
+            builder.add_cardinality_filter(variables)
 
     @staticmethod
     def generate_variables(var_generator, type_, number_of_variables):

@@ -1,0 +1,10 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix test: <http://test.example.com/> .
+@prefix : <http://test.example.com/shapes/> .
+
+:SubjectsOfToA a sh:NodeShape ;
+  sh:targetSubjectsOf test:toA ;
+  sh:property [
+    sh:path test:property0 ;
+    sh:minCount 1
+  ] .

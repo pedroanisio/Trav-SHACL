@@ -3,7 +3,6 @@ __author__ = 'Monica Figuera and Philipp D. Rohde'
 
 import itertools
 
-from TravSHACL.constraints.SPARQLConstraint import SPARQLConstraint
 from TravSHACL.utils.VariableGenerator import VariableGenerator
 from TravSHACL.core.RulePattern import RulePattern
 from TravSHACL.sparql.QueryGenerator import QueryGenerator
@@ -131,7 +130,7 @@ class Shape:
 
     def get_sparql_constraints(self):
         """ Get all SPARQL constraints of the shape """
-        return [c for c in self.constraints if isinstance(c, SPARQLConstraint)]
+        return [c for c in self.constraints if c.is_sparql_constraint()]
 
     def get_shape_refs(self):
         return [c.get_shape_ref() for c in self.constraints if c.get_shape_ref() is not None]
@@ -165,7 +164,7 @@ class Shape:
         self.queriesFilters = {}
         for ref in self.referencedShapes.keys():
             for c in self.constraints:
-                if c.path == self.referencedShapes[ref]:
+                if c.path_sparql() == self.referencedShapes[ref]:
                     query_valid, query_invalid = self.QueryGenerator.generate_target_query('template_FILTER', [c],
                                                                                            self.targetQueryNoPref,
                                                                                            self.includePrefixes,

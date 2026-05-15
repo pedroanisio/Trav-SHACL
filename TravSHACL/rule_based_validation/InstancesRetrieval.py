@@ -230,7 +230,7 @@ class InstancesRetrieval:
                     values_clauses += 'VALUES' + obj_var + ' {$instances$}\n'
                     if q_type == 'max':
                         focus_var = c.varGenerator.get_focus_node_var()
-                        inter_shape_triples += '?' + focus_var + ' ' + c.path + obj_var + '.\n'
+                        inter_shape_triples += '?' + focus_var + ' ' + c.path_sparql() + obj_var + '.\n'
 
             return [query_template.replace(
                         '$filter_clause_to_add$',

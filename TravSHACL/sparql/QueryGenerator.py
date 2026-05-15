@@ -5,13 +5,10 @@ __author__ = 'Monica Figuera and Philipp D. Rohde'
 
 from typing import TYPE_CHECKING
 
-from TravSHACL.constraints.MaxOnlyConstraint import MaxOnlyConstraint
-
 if TYPE_CHECKING:
     from TravSHACL.core.Shape import Shape
 
 from TravSHACL.utils.VariableGenerator import VariableGenerator
-from TravSHACL.constraints.Constraint import Constraint
 from TravSHACL.core.RulePattern import RulePattern
 
 
@@ -114,7 +111,7 @@ class QueryGenerator:
         :return: target query with VALUES clause
         """
         prefixes = self.shape.get_prefix_string() if include_prefixes else ''
-        ref_path = constraint[0].path
+        ref_path = constraint[0].path_sparql()
         focus_var = VariableGenerator.get_focus_node_var()
         target_node = get_target_node_statement(target_query)
         count = '(COUNT(DISTINCT ?inst) AS ?cnt)' if filter_by_valid else '((COUNT(DISTINCT ?inst2) - COUNT(DISTINCT ?inst)) AS ?cnt)'
@@ -167,7 +164,7 @@ class QueryGenerator:
             if c.options:
                 or_affix = 1   # not in use yet but can be used if there are more than one constraint in an or_option
                 for option in c.options:
-                    if isinstance(option, MaxOnlyConstraint):
+                    if option.is_max_only_constraint():
                         builder.build_clause(option, or_value, or_affix, True)
                     else:
                         builder.build_clause(option, or_value, or_affix, False)
@@ -420,14 +417,13 @@ class QueryBuilder:
 
         selective_closing_braces = '}}' if self.include_selectivity and self.target_query is not None else ''
 
-        if len(self.constraints) == 1 and isinstance(self.constraints[0], MaxOnlyConstraint) and self.constraints[
-            0].get_shape_ref() is None:
+        if len(self.constraints) == 1 and self.constraints[0].is_max_only_constraint() and self.constraints[0].get_shape_ref() is None:
             target_node = ''
             if self.include_selectivity and self.target_query is not None:
                 target_node = get_target_node_statement(self.target_query) + '.\n'
 
             if self.constraints[0].get_value() is not None:
-                pred = self.constraints[0].path
+                pred = self.constraints[0].path_sparql()
                 obj = self.constraints[0].get_value()
                 return ''.join([prefixes,
                                 self.__get_projection_string(),
@@ -543,46 +539,7 @@ class QueryBuilder:
         :param or_affix: used in the case of more than one or triple within an option in an 'or' operation
         :param maxonly: tells if the constraint is maxonly
         """
-        variables = c.get_variables()
-        if not maxonly:
-            if isinstance(c, Constraint):
-                path = c.path
-                if c.get_value() is not None:  # if there is fixed value for the object
-                    if or_value > 0:
-                        self.add_union_triples(path, c.get_value(), or_value, or_affix)
-                    else:
-                        self.add_triple(path, c.get_value())
-                    return
-
-                if or_value > 0:
-                    v = variables[0]
-                    self.add_union_triples(path, '?' + v, or_value, or_affix, card=c.min)
-                else:
-                    for v in variables:
-                        if c.get_shape_ref() is not None:  # if there is an existing reference to another shape
-                            self.inter_shape_refs[v] = c.get_shape_ref()
-                            self.triples.append('\n$inter_shape_type_to_add$')
-                        self.add_triple(path, '?' + v)
-
-            if c.get_value() is not None:
-                self.add_constant_filter(
-                    variables.iterator().next(),
-                    c.get_value().get(),
-                    c.get_is_pos()
-                )
-
-            if c.get_datatype() is not None:
-                for v in variables:
-                    self.add_datatype_filter(v, c.get_datatype(), c.get_is_pos())
-
-            if len(variables) > 1 and or_value == 0:
-                self.add_cardinality_filter(variables)
-
-        else:
-            if isinstance(c, Constraint):
-                path = c.path
-                v = variables[0]        # this limits the use of max_constraints
-                self.add_union_triples(path, '?' + v, or_value, or_affix, True, card=c.max)
+        c.emit_filter(self, VariableGenerator.get_focus_node_var(), or_value, or_affix, maxonly)
 
     def build_query(self, rule_pattern, include_prefixes):
         """

@@ -18,3 +18,6 @@ class SPARQLConstraint(Constraint):
         self.min = -1
         self.max = -1
         self.query = query
+
+    def is_sparql_constraint(self):
+        return True

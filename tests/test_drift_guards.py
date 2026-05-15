@@ -136,6 +136,35 @@ def _ci_python_versions():
     return ast.literal_eval(match.group(1))
 
 
+def _python_constant(path, name):
+    source = ast.parse(_read(path))
+    for node in source.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
+            return ast.literal_eval(node.value)
+    raise AssertionError(f'Missing Python constant: {name}')
+
+
+def _isinstance_type_names(path):
+    source = ast.parse(_read(path))
+    names = set()
+    for node in ast.walk(source):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == 'isinstance'
+            and len(node.args) >= 2
+        ):
+            continue
+        type_arg = node.args[1]
+        if isinstance(type_arg, ast.Name):
+            names.add(type_arg.id)
+        elif isinstance(type_arg, ast.Tuple):
+            names.update(item.id for item in type_arg.elts if isinstance(item, ast.Name))
+    return names
+
+
 def test_shape_schema_documented_parameters_match_constructor():
     library_doc = _read('docs/library.rst')
     parameters_section = _section(library_doc, 'Parameters\n==========', 'Results: Internal Structure')
@@ -190,6 +219,26 @@ def test_supported_python_versions_match_ci_matrix():
 
     assert classifier_versions == ci_versions
     assert setup_kwargs['python_requires'] == f'>={ci_versions[0]}'
+
+
+def test_test_endpoint_contract_matches_compose_and_ci():
+    compose_text = _read('tests/docker-compose.yml')
+    workflow = _read('.github/workflows/test.yml')
+    test_data_block = _compose_service_block(compose_text, 'test_data')
+    external_port, _ = _compose_port_mapping(test_data_block)
+    endpoint_url = f'http://localhost:{external_port}/sparql'
+
+    assert _python_constant('tests/test_cases.py', 'TEST_ENDPOINT') == endpoint_url
+    assert 'cd tests' in workflow
+    assert 'docker compose up -d' in workflow
+    assert f'--fail {endpoint_url}' in workflow
+
+
+def test_constraint_dispatch_stays_polymorphic():
+    forbidden = {'Constraint', 'MinOnlyConstraint', 'MaxOnlyConstraint', 'MinMaxConstraint', 'SPARQLConstraint'}
+
+    assert _isinstance_type_names('TravSHACL/sparql/QueryGenerator.py').isdisjoint(forbidden)
+    assert _isinstance_type_names('TravSHACL/core/Shape.py').isdisjoint(forbidden)
 
 
 def test_feature_claims_have_source_or_fixture_evidence():

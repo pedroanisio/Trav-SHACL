@@ -1,0 +1,9 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix test: <http://test.example.com/> .
+
+test:ClassA a sh:NodeShape, rdfs:Class ;
+  sh:property [
+    sh:path test:property0 ;
+    sh:minCount 1
+  ] .

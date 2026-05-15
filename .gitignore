@@ -21,3 +21,4 @@ example/result/
 example/data/virtuoso/
 .repo/
 .agent-tasks
+.claude/scheduled_tasks.lock

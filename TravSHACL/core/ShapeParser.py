@@ -13,12 +13,14 @@ from itertools import islice
 
 from TravSHACL.constraints.SPARQLConstraint import SPARQLConstraint
 from TravSHACL.core.Shape import Shape
+from TravSHACL.core.Path import PathExpression
 from TravSHACL.utils.VariableGenerator import VariableGenerator
 from TravSHACL.constraints.MaxOnlyConstraint import MaxOnlyConstraint
 from TravSHACL.constraints.MinOnlyConstraint import MinOnlyConstraint
 
 NAMESPACE_SHACL = 'http://www.w3.org/ns/shacl#'
 NAMESPACE_RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'
+NAMESPACE_RDFS = 'http://www.w3.org/2000/01/rdf-schema#'
 
 SH_NODE_SHAPE = NAMESPACE_SHACL + 'NodeShape'
 SH_PROPERTY_SHAPE = NAMESPACE_SHACL + 'PropertyShape'
@@ -49,6 +51,8 @@ IGNORED_CONSTRAINT_IRIS = {
     NAMESPACE_RDF + 'type',
     NAMESPACE_SHACL + 'targetClass',
     NAMESPACE_SHACL + 'targetNode',
+    NAMESPACE_SHACL + 'targetSubjectsOf',
+    NAMESPACE_SHACL + 'targetObjectsOf',
     NAMESPACE_SHACL + 'targetQuery',
 }
 
@@ -197,15 +201,33 @@ class ShapeParser:
                     target_def = str(res[0])
                     target_type = 'node'
                     break
+            elif len(shapes_graph.query(queries[10].format(shape=name))) != 0:
+                for res in shapes_graph.query(queries[10].format(shape=name)):
+                    target_def = str(res[0])
+                    target_type = 'subjectsOf'
+                    break
+            elif len(shapes_graph.query(queries[11].format(shape=name))) != 0:
+                for res in shapes_graph.query(queries[11].format(shape=name)):
+                    target_def = str(res[0])
+                    target_type = 'objectsOf'
+                    break
+            elif len(shapes_graph.query(queries[12].format(shape=name))) != 0:
+                target_def = name
+                target_type = 'implicitClass'
 
             target_query = None
-            if target_def is not None and target_type == 'class':
+            if target_def is not None and target_type in {'class', 'implicitClass'}:
                 for res in shapes_graph.query(QUERY_TARGET_QUERY.format(shape=name)):
                     target_query = str(res[0])
                 if target_query is None:
-                    target_query = 'SELECT ?x WHERE { ?x a <' + target_def + '> }'  # come up with a query for this
-                    if urlparse(target_def).netloc != '':  # if the target node is a url, add '<>' to it
-                        target_def = '<' + target_def + '>'
+                    target_query = 'SELECT ?x WHERE { ?x a ' + self.sparql_term(target_def) + ' }'
+                    target_def = self.sparql_term(target_def)
+            elif target_def is not None and target_type == 'subjectsOf':
+                target_def = self.sparql_term(target_def)
+                target_query = 'SELECT ?x WHERE { ?x ' + target_def + ' ?target }'
+            elif target_def is not None and target_type == 'objectsOf':
+                target_def = self.sparql_term(target_def)
+                target_query = 'SELECT ?x WHERE { ?target ' + target_def + ' ?x }'
 
             cons_dict = self.parse_all_const(shapes_graph, name=name, target_def=target_def, target_type=target_type,
                                              query=queries)
@@ -223,9 +245,8 @@ class ShapeParser:
             referenced_shapes = self.shape_references(const_array)
 
             # helps to navigate the shape.__compute_target_queries function
-            referenced_shape = {'<' + key + '>': '<' + referenced_shapes[key] + '>'
-                                for key in referenced_shapes.keys()
-                                if urlparse(referenced_shapes[key]).netloc != ''}
+            referenced_shape = {self.sparql_term(key): self.sparql_term(referenced_shapes[key])
+                                for key in referenced_shapes.keys()}
 
             # to helps to navigate the ShapeSchema.compute_edges function
             if urlparse(name).netloc != '':
@@ -282,6 +303,17 @@ class ShapeParser:
         return metadata
 
     @staticmethod
+    def sparql_term(value):
+        if value is None:
+            return None
+        value = str(value)
+        if value.startswith('<') and value.endswith('>'):
+            return value
+        if urlparse(value).netloc != '':
+            return '<' + value + '>'
+        return value
+
+    @staticmethod
     def abbreviated_syntax_used(constraints):
         """
         Run after parsingConstraints.
@@ -290,7 +322,8 @@ class ShapeParser:
         :return: True if prefix notation is used, False otherwise
         """
         for c in constraints:
-            if c.path is not None and (c.path.startswith('<') and c.path.endswith('>')):
+            path = c.path_sparql()
+            if path is not None and (path.startswith('<') and path.endswith('>')):
                 return False
         return True
 
@@ -302,7 +335,8 @@ class ShapeParser:
         :param constraints: the constraints to get the referenced shapes for
         :return: Python dictionary with the referenced shapes and the path referencing the shape
         """
-        return {c.get('shape'): c.get('path') for c in constraints if c.get('shape') is not None}
+        return {c.get('shape'): PathExpression.from_string(c.get('path')).to_sparql()
+                for c in constraints if c.get('shape') is not None}
 
     @staticmethod
     def chunks(datei, SIZE):
@@ -336,6 +370,22 @@ class ShapeParser:
 
         QUERY_TARGET_2 = '''SELECT ?target WHERE {{
                     <{shape}> <http://www.w3.org/ns/shacl#targetNode> ?target .
+                    }}
+                        '''
+
+        QUERY_TARGET_SUBJECTS_OF = '''SELECT ?target WHERE {{
+                    <{shape}> <http://www.w3.org/ns/shacl#targetSubjectsOf> ?target .
+                    }}
+                        '''
+
+        QUERY_TARGET_OBJECTS_OF = '''SELECT ?target WHERE {{
+                    <{shape}> <http://www.w3.org/ns/shacl#targetObjectsOf> ?target .
+                    }}
+                        '''
+
+        QUERY_IMPLICIT_CLASS = '''SELECT ?class WHERE {{
+                    <{shape}> a <http://www.w3.org/2000/01/rdf-schema#Class> .
+                    BIND(<{shape}> AS ?class)
                     }}
                         '''
 
@@ -406,7 +456,8 @@ class ShapeParser:
             ))
         }}'''
         return QUERY_SHAPES, QUERY_TARGET_1, QUERY_TARGET_2, QUERY_CONSTRAINTS, QUERY_CONSTRAINT_DETAILS, \
-               QUERY_QVS_REF_1, QUERY_QVS_REF_2, QUERY_SPARQL_CONSTRAINTS, QUERY_OR, QUERY_SHAPE_METADATA
+               QUERY_QVS_REF_1, QUERY_QVS_REF_2, QUERY_SPARQL_CONSTRAINTS, QUERY_OR, QUERY_SHAPE_METADATA, \
+               QUERY_TARGET_SUBJECTS_OF, QUERY_TARGET_OBJECTS_OF, QUERY_IMPLICIT_CLASS
 
     def get_res(self, filename, name, query):
         """
@@ -623,20 +674,19 @@ class ShapeParser:
         o_neg = True if (negated is None) else not negated  # True means it is a positive constraint
         o_query = None if (query is None) else str(query)
 
-        if path is not None and urlparse(path).netloc != '':  # if the predicate is a url, add '<>' to it
-            o_path = '<' + path + '>'
+        if path is not None:  # if the predicate is a url, add '<>' to it
+            o_path = self.sparql_term(path)
         if is_inverse_path:
             o_path = '^' + o_path
 
-        if urlparse(
-                shape_ref).netloc != '' and shape_ref is not None:  # if the shape reference is a url, add '<>' to it
-            o_shape_ref = '<' + shape_ref + '>'
+        if shape_ref is not None:  # if the shape reference is a url, add '<>' to it
+            o_shape_ref = self.sparql_term(shape_ref)
 
-        if urlparse(value).netloc != '' and value is not None:  # if the value reference is a url, add '<>' to it
-            o_value = '<' + value + '>'
+        if value is not None:  # if the value reference is a url, add '<>' to it
+            o_value = self.sparql_term(value)
 
-        if urlparse(datatype).netloc != '' and datatype is not None:  # if the data type is a url, add '<>' to it
-            o_datatype = '<' + datatype + '>'
+        if datatype is not None:  # if the data type is a url, add '<>' to it
+            o_datatype = self.sparql_term(datatype)
 
         if o_path is not None:
             if o_min is not None:
