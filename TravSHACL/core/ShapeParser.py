@@ -10,26 +10,33 @@ from urllib.parse import urlparse
 
 import rdflib.term
 from rdflib import Graph
+from rdflib.namespace import RDF
 
+from TravSHACL.constraints.AndConstraint import AndConstraint
 from TravSHACL.constraints.ClassConstraint import ClassConstraint
+from TravSHACL.constraints.ClosedConstraint import ClosedConstraint
+from TravSHACL.constraints.HasValueConstraint import HasValueConstraint
+from TravSHACL.constraints.InConstraint import InConstraint
 from TravSHACL.constraints.LanguageInConstraint import LanguageInConstraint
 from TravSHACL.constraints.MaxLengthConstraint import MaxLengthConstraint
 from TravSHACL.constraints.MaxOnlyConstraint import MaxOnlyConstraint
 from TravSHACL.constraints.MinLengthConstraint import MinLengthConstraint
 from TravSHACL.constraints.MinOnlyConstraint import MinOnlyConstraint
 from TravSHACL.constraints.NodeKindConstraint import NodeKindConstraint
+from TravSHACL.constraints.NotConstraint import NotConstraint
 from TravSHACL.constraints.PairDisjointConstraint import PairDisjointConstraint
 from TravSHACL.constraints.PairEqualsConstraint import PairEqualsConstraint
 from TravSHACL.constraints.PairLessThanConstraint import PairLessThanConstraint
 from TravSHACL.constraints.PairLessThanOrEqualsConstraint import PairLessThanOrEqualsConstraint
 from TravSHACL.constraints.PatternConstraint import PatternConstraint
+from TravSHACL.constraints.QualifiedValueShapeConstraint import QualifiedValueShapeConstraint
 from TravSHACL.constraints.RangeMaxExclusiveConstraint import RangeMaxExclusiveConstraint
 from TravSHACL.constraints.RangeMaxInclusiveConstraint import RangeMaxInclusiveConstraint
 from TravSHACL.constraints.RangeMinExclusiveConstraint import RangeMinExclusiveConstraint
 from TravSHACL.constraints.RangeMinInclusiveConstraint import RangeMinInclusiveConstraint
 from TravSHACL.constraints.SPARQLConstraint import SPARQLConstraint
 from TravSHACL.constraints.UniqueLangConstraint import UniqueLangConstraint
-from TravSHACL.core.Path import PathExpression
+from TravSHACL.core.Path import Alternative, Inverse, OneOrMore, PathExpression, Predicate, Sequence, ZeroOrMore, ZeroOrOne
 from TravSHACL.core.Shape import Shape
 from TravSHACL.utils.VariableGenerator import VariableGenerator
 
@@ -44,13 +51,20 @@ CONSTRAINT_DISPATCH = {
     NAMESPACE_SHACL + "path": "path",
     NAMESPACE_SHACL + "minCount": "min",
     NAMESPACE_SHACL + "maxCount": "max",
-    NAMESPACE_SHACL + "qualifiedMinCount": "min",
-    NAMESPACE_SHACL + "qualifiedMaxCount": "max",
+    NAMESPACE_SHACL + "qualifiedMinCount": "qualifiedMin",
+    NAMESPACE_SHACL + "qualifiedMaxCount": "qualifiedMax",
     NAMESPACE_SHACL + "datatype": "datatype",
-    NAMESPACE_SHACL + "qualifiedValueShape": "shape",
+    NAMESPACE_SHACL + "qualifiedValueShape": "qualifiedShape",
+    NAMESPACE_SHACL + "qualifiedValueShapesDisjoint": "qualifiedDisjoint",
     NAMESPACE_SHACL + "node": "shape",
     NAMESPACE_SHACL + "value": "value",
     NAMESPACE_SHACL + "not": "negated",
+    NAMESPACE_SHACL + "and": "and",
+    NAMESPACE_SHACL + "xone": "xone",
+    NAMESPACE_SHACL + "closed": "closed",
+    NAMESPACE_SHACL + "ignoredProperties": "ignoredProperties",
+    NAMESPACE_SHACL + "hasValue": "hasValue",
+    NAMESPACE_SHACL + "in": "in",
     NAMESPACE_SHACL + "class": "class",
     NAMESPACE_SHACL + "nodeKind": "nodeKind",
     NAMESPACE_SHACL + "minInclusive": "minInclusive",
@@ -407,6 +421,8 @@ class ShapeParser:
 
         if predicate in literal_predicates:
             return ShapeParser.sparql_literal(value)
+        if predicate == NAMESPACE_SHACL + "hasValue" and isinstance(value, rdflib.term.Literal):
+            return ShapeParser.sparql_literal(value)
         if predicate in quoted_string_predicates:
             return json.dumps(str(value))
         return str(value)
@@ -505,7 +521,6 @@ class ShapeParser:
             {{
                 ?s ?p ?o .
                 FILTER( str(?s) = "{constraint}" )
-                FILTER( ?p != <http://www.w3.org/ns/shacl#path> || !isBlank(?o) )
             }} UNION {{
                 ?s <http://www.w3.org/ns/shacl#path>/<http://www.w3.org/ns/shacl#inversePath> ?o .
                 BIND(<http://www.w3.org/ns/shacl#path> AS ?p)
@@ -581,6 +596,7 @@ class ShapeParser:
         :return: valid response from query execution
         """
         exp_dict = collections.defaultdict(list)
+        self._append_shape_level_constraints(filename, name, exp_dict)
         if filename.query(query[3].format(shape=name)):
             for constraint in filename.query(query[3].format(shape=name)):
                 constraint_id = constraint[0]
@@ -590,9 +606,18 @@ class ShapeParser:
                     predicate = str(detail_dict["p"])
                     obj = detail_dict["o"]
 
-                    if isinstance(obj, rdflib.term.BNode) and predicate == NAMESPACE_SHACL + "languageIn":
+                    if isinstance(obj, rdflib.term.BNode) and predicate == NAMESPACE_SHACL + "path":
+                        exp_dict[str(constraint_id)].append([predicate, self.parse_path_node(filename, obj)])
+                    elif isinstance(obj, rdflib.term.BNode) and predicate == NAMESPACE_SHACL + "languageIn":
                         languages = [json.dumps(str(item)) for item in filename.items(obj)]
                         exp_dict[str(constraint_id)].append([predicate, languages])
+                    elif isinstance(obj, rdflib.term.BNode) and predicate == NAMESPACE_SHACL + "in":
+                        values = [self.sparql_literal(item) for item in filename.items(obj)]
+                        exp_dict[str(constraint_id)].append([predicate, values])
+                    elif isinstance(obj, rdflib.term.BNode) and predicate == NAMESPACE_SHACL + "qualifiedValueShape":
+                        exp_dict[str(constraint_id)].append([predicate, self.parse_shape_expression(filename, obj)])
+                    elif isinstance(obj, rdflib.term.BNode) and predicate == NAMESPACE_SHACL + "not":
+                        exp_dict[str(constraint_id)].append([predicate, self.parse_property_shape(filename, obj)])
                     elif isinstance(obj, rdflib.term.BNode):
                         qv_type = detail_dict["p"]
                         qvs = obj
@@ -643,6 +668,107 @@ class ShapeParser:
 
         return exp_dict
 
+    def _append_shape_level_constraints(self, filename, name, exp_dict):
+        subject = rdflib.term.URIRef(name)
+        direct = []
+        for predicate, obj in filename.predicate_objects(subject):
+            predicate = str(predicate)
+            if predicate not in CONSTRAINT_DISPATCH:
+                continue
+            if predicate in {NAMESPACE_SHACL + "path", NAMESPACE_SHACL + "node", NAMESPACE_SHACL + "value"}:
+                continue
+            if predicate == NAMESPACE_SHACL + "closed":
+                direct.append([predicate, self.parse_bool(obj)])
+            elif predicate == NAMESPACE_SHACL + "ignoredProperties" and isinstance(obj, rdflib.term.BNode):
+                direct.append([predicate, [self.sparql_term(item) for item in filename.items(obj)]])
+            elif predicate in {NAMESPACE_SHACL + "and", NAMESPACE_SHACL + "xone"}:
+                direct.append([predicate, [self.parse_shape_expression(filename, item) for item in filename.items(obj)]])
+            elif predicate == NAMESPACE_SHACL + "not" and isinstance(obj, rdflib.term.BNode):
+                direct.append([predicate, self.parse_property_shape(filename, obj)])
+            elif predicate == NAMESPACE_SHACL + "not":
+                if self.ignore_errors:
+                    log.warning("Unsupported SHACL shape-ref sh:not %s; skipping it...", obj)
+                else:
+                    raise NotImplementedError("Shape-reference sh:not is not implemented")
+        if direct:
+            exp_dict[name + "#shape-level"].extend(direct)
+
+    def parse_shape_expression(self, filename, node):
+        node_ref = filename.value(node, rdflib.term.URIRef(NAMESPACE_SHACL + "node"))
+        if node_ref is not None:
+            return {"shape": self.sparql_term(node_ref)}
+
+        class_ref = filename.value(node, rdflib.term.URIRef(NAMESPACE_SHACL + "class"))
+        if class_ref is not None:
+            return {"class": self.sparql_term(class_ref)}
+
+        property_ref = filename.value(node, rdflib.term.URIRef(NAMESPACE_SHACL + "property"))
+        if property_ref is not None:
+            return self.parse_property_shape(filename, property_ref)
+
+        if not isinstance(node, rdflib.term.BNode):
+            return {"shape": self.sparql_term(node)}
+
+        if self.ignore_errors:
+            log.warning("Unsupported SHACL shape expression %s; skipping it...", node)
+            return {}
+        raise NotImplementedError("Unsupported SHACL shape expression: " + str(node))
+
+    def parse_property_shape(self, filename, node):
+        parsed = {}
+        for predicate, obj in filename.predicate_objects(node):
+            predicate = str(predicate)
+            if predicate == NAMESPACE_SHACL + "path":
+                parsed["path"] = self.parse_path_node(filename, obj)
+            elif predicate == NAMESPACE_SHACL + "in" and isinstance(obj, rdflib.term.BNode):
+                parsed["in"] = [self.sparql_literal(item) for item in filename.items(obj)]
+            elif predicate == NAMESPACE_SHACL + "languageIn" and isinstance(obj, rdflib.term.BNode):
+                parsed["languageIn"] = [json.dumps(str(item)) for item in filename.items(obj)]
+            elif predicate == NAMESPACE_SHACL + "qualifiedValueShape" and isinstance(obj, rdflib.term.BNode):
+                parsed["qualifiedShape"] = self.parse_shape_expression(filename, obj)
+            elif predicate == NAMESPACE_SHACL + "not" and isinstance(obj, rdflib.term.BNode):
+                parsed["negated"] = self.parse_property_shape(filename, obj)
+            else:
+                key = CONSTRAINT_DISPATCH.get(predicate)
+                if key is not None:
+                    parsed[key] = self.constraint_value(predicate, obj)
+                elif predicate not in IGNORED_CONSTRAINT_IRIS and not self.ignore_errors:
+                    raise NotImplementedError("Unsupported SHACL constraint IRI: " + predicate)
+        return parsed
+
+    def parse_path_node(self, filename, node):
+        if not isinstance(node, rdflib.term.BNode):
+            return PathExpression.from_string(self.sparql_term(node))
+
+        inverse = filename.value(node, rdflib.term.URIRef(NAMESPACE_SHACL + "inversePath"))
+        if inverse is not None:
+            return Inverse(self.parse_path_node(filename, inverse))
+
+        alternative = filename.value(node, rdflib.term.URIRef(NAMESPACE_SHACL + "alternativePath"))
+        if alternative is not None:
+            return Alternative(self.parse_path_node(filename, item) for item in filename.items(alternative))
+
+        zero_or_more = filename.value(node, rdflib.term.URIRef(NAMESPACE_SHACL + "zeroOrMorePath"))
+        if zero_or_more is not None:
+            return ZeroOrMore(self.parse_path_node(filename, zero_or_more))
+
+        one_or_more = filename.value(node, rdflib.term.URIRef(NAMESPACE_SHACL + "oneOrMorePath"))
+        if one_or_more is not None:
+            return OneOrMore(self.parse_path_node(filename, one_or_more))
+
+        zero_or_one = filename.value(node, rdflib.term.URIRef(NAMESPACE_SHACL + "zeroOrOnePath"))
+        if zero_or_one is not None:
+            return ZeroOrOne(self.parse_path_node(filename, zero_or_one))
+
+        first = filename.value(node, RDF.first)
+        if first is not None:
+            return Sequence(self.parse_path_node(filename, item) for item in filename.items(node))
+
+        if self.ignore_errors:
+            log.warning("Unsupported SHACL path expression %s; skipping it...", node)
+            return Predicate(str(node))
+        raise NotImplementedError("Unsupported SHACL path expression: " + str(node))
+
     def parse_all_const(self, filename, name, target_def, target_type, query):
         """
 
@@ -671,11 +797,21 @@ class ShapeParser:
                 if type(dk) is not tuple:
                     trav_dict["min"] = None
                     trav_dict["max"] = None
+                    trav_dict["qualifiedMin"] = None
+                    trav_dict["qualifiedMax"] = None
+                    trav_dict["qualifiedShape"] = None
+                    trav_dict["qualifiedDisjoint"] = None
                     trav_dict["value"] = None
+                    trav_dict["hasValue"] = None
+                    trav_dict["in"] = None
                     trav_dict["path"] = None
                     trav_dict["shape"] = None
                     trav_dict["datatype"] = None
                     trav_dict["negated"] = None
+                    trav_dict["and"] = None
+                    trav_dict["xone"] = None
+                    trav_dict["closed"] = None
+                    trav_dict["ignoredProperties"] = []
                     trav_dict["class"] = None
                     trav_dict["nodeKind"] = None
                     trav_dict["minInclusive"] = None
@@ -709,7 +845,19 @@ class ShapeParser:
                                     self.dispatch_constraint_entry(trav_dict["or"][i_or], str(j_sub[0]), j_sub[1])
 
                 exp_dict[str(dk)] = trav_dict.copy()
+        self._populate_closed_allowed_paths(exp_dict)
         return exp_dict
+
+    @staticmethod
+    def _populate_closed_allowed_paths(exp_dict):
+        allowed_paths = [
+            entry.get("path")
+            for key, entry in exp_dict.items()
+            if "#shape-level" not in key and entry.get("path") is not None
+        ]
+        for entry in exp_dict.values():
+            if entry.get("closed"):
+                entry["allowedPaths"] = allowed_paths
 
     def dispatch_constraint_entry(self, trav_dict, predicate, value):
         if predicate == NAMESPACE_SHACL + "flags":
@@ -816,14 +964,24 @@ class ShapeParser:
         """
         min_ = obj.get("min")
         max_ = obj.get("max")
+        qualified_min = obj.get("qualifiedMin")
+        qualified_max = obj.get("qualifiedMax")
+        qualified_shape = obj.get("qualifiedShape")
         shape_ref = obj.get("shape")
         datatype = obj.get("datatype")
         value = obj.get("value")
+        has_value = obj.get("hasValue")
+        in_values = obj.get("in")
         path = obj.get("path")
         negated = obj.get("negated")
+        and_ = obj.get("and")
+        xone = obj.get("xone")
+        closed = obj.get("closed")
         query = obj.get("sparql")
 
-        if path is not None and str(path).startswith("^"):
+        if isinstance(path, PathExpression):
+            is_inverse_path = False
+        elif path is not None and str(path).startswith("^"):
             is_inverse_path = True
             path = str(path)[1:]
         else:
@@ -834,11 +992,11 @@ class ShapeParser:
         o_shape_ref = None if (shape_ref is None) else str(shape_ref)
         o_datatype = None if (datatype is None) else str(datatype)
         o_value = None if (value is None) else str(value)
-        o_path = None if (path is None) else str(path)
+        o_path = None if (path is None) else path if isinstance(path, PathExpression) else str(path)
         o_neg = True if (negated is None) else not negated  # True means it is a positive constraint
         o_query = None if (query is None) else str(query)
 
-        if path is not None:  # if the predicate is a url, add '<>' to it
+        if path is not None and not isinstance(path, PathExpression):  # if the predicate is a url, add '<>' to it
             o_path = self.sparql_term(path)
         if is_inverse_path:
             o_path = "^" + o_path
@@ -854,7 +1012,68 @@ class ShapeParser:
 
         constraints = []
 
+        if and_ is not None:
+            shape_refs = [self.sparql_term(item["shape"]) for item in and_ if item.get("shape") is not None]
+            if len(shape_refs) != len(and_):
+                raise NotImplementedError("sh:and currently supports only shape references")
+            constraints.append(AndConstraint(id_, shape_refs, o_neg, options, target_def))
+
+        if xone is not None:
+            raise NotImplementedError("sh:xone is not implemented")
+
+        if isinstance(negated, dict):
+            nested = self.parse_constraint(var_generator, negated, id_ + "_not", target_def, None)
+            constraints.append(NotConstraint(var_generator, id_, nested, True, options, target_def))
+
+        if closed:
+            constraints.append(
+                ClosedConstraint(
+                    var_generator,
+                    id_,
+                    [PathExpression.from_string(path).to_sparql() for path in obj.get("allowedPaths", [])],
+                    [self.sparql_term(path) for path in obj.get("ignoredProperties", [])],
+                    o_neg,
+                    options,
+                    target_def,
+                )
+            )
+
+        if o_path is None and constraints:
+            return self.apply_constraint_metadata(constraints, obj)
+
         if o_path is not None:
+            if qualified_shape is not None:
+                q_shape_ref = qualified_shape.get("shape") if isinstance(qualified_shape, dict) else qualified_shape
+                if q_shape_ref is None:
+                    raise NotImplementedError("sh:qualifiedValueShape currently supports only sh:node references")
+                if qualified_min is not None:
+                    constraints.append(
+                        QualifiedValueShapeConstraint(
+                            var_generator,
+                            id_,
+                            o_path,
+                            self.sparql_term(q_shape_ref),
+                            qualified_min,
+                            None,
+                            o_neg,
+                            options,
+                            target_def,
+                        )
+                    )
+                if qualified_max is not None:
+                    constraints.append(
+                        QualifiedValueShapeConstraint(
+                            var_generator,
+                            id_,
+                            o_path,
+                            self.sparql_term(q_shape_ref),
+                            None,
+                            qualified_max,
+                            o_neg,
+                            options,
+                            target_def,
+                        )
+                    )
             if o_min is not None:
                 if o_max is not None:
                     constraints.extend(
@@ -972,6 +1191,10 @@ class ShapeParser:
                 )
             if self.parse_bool(obj.get("uniqueLang", False)):
                 constraints.append(UniqueLangConstraint(var_generator, id_, o_path, o_neg, options, target_def))
+            if has_value is not None:
+                constraints.append(HasValueConstraint(var_generator, id_, o_path, self.sparql_term(has_value), o_neg, options, target_def))
+            if in_values is not None:
+                constraints.append(InConstraint(var_generator, id_, o_path, in_values, o_neg, options, target_def))
             if obj.get("equals") is not None:
                 constraints.append(
                     PairEqualsConstraint(

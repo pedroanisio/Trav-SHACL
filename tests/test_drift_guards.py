@@ -243,10 +243,7 @@ def test_constraint_dispatch_stays_polymorphic():
         "TravSHACL/rule_based_validation/Validation.py",
         "TravSHACL/rule_based_validation/InstancesRetrieval.py",
     ]
-    allowed = {
-        "MinOnlyConstraint",
-        "MaxOnlyConstraint",
-    }
+    allowed = set()
     offenders = {
         name
         for path in checked_paths
@@ -261,7 +258,9 @@ def test_feature_claims_have_source_or_fixture_evidence():
     feature_doc = _read("docs/feature.rst")
     case_text = _read_cases()
     parser_source = _read("TravSHACL/core/ShapeParser.py")
-    constraint_source = _read("TravSHACL/constraints/Constraint.py")
+    constraint_source = "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted((REPO_ROOT / "TravSHACL/constraints").glob("*.py"))
+    )
     endpoint_source = _read("TravSHACL/sparql/SPARQLEndpoint.py")
     test_cases_source = _read("tests/test_cases.py")
 
@@ -276,7 +275,15 @@ def test_feature_claims_have_source_or_fixture_evidence():
         ),
         "relaxed shape-based constraints": (
             ["``sh:qualifiedValueShape``", "``sh:qualifiedMinCount``", "``sh:qualifiedMaxCount``"],
-            ["sh:qualifiedValueShape", "sh:qualifiedMinCount", "sh:qualifiedMaxCount"],
+            ["sh:qualifiedValueShape", "sh:qualifiedMinCount", "sh:qualifiedMaxCount", "QualifiedValueShapeConstraint"],
+        ),
+        "direct value constraints": (
+            ["``sh:hasValue``", "``sh:in``"],
+            ["sh:hasValue", "sh:in", "HasValueConstraint", "InConstraint"],
+        ),
+        "closed shapes": (
+            ["``sh:closed``", "``sh:ignoredProperties``"],
+            ["sh:closed", "ignoredProperties", "ClosedConstraint"],
         ),
         "SPARQL constraints": (
             ["``sh:sparql``", "``sh:select``"],
@@ -289,6 +296,10 @@ def test_feature_claims_have_source_or_fixture_evidence():
         "inverse paths": (
             ["sh:inversePath"],
             ["sh:inversePath"],
+        ),
+        "extended paths": (
+            ["``sh:alternativePath``", "``sh:zeroOrMorePath``", "``sh:oneOrMorePath``", "``sh:zeroOrOnePath``"],
+            ["alternativePath", "zeroOrMorePath", "oneOrMorePath", "zeroOrOnePath"],
         ),
         "value-type constraints": (
             ["``sh:class``", "``sh:nodeKind``"],

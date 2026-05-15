@@ -11,14 +11,17 @@ The following is a list of what is supported:
 *   value-range constraints, i.e., ``sh:minInclusive``, ``sh:minExclusive``, ``sh:maxInclusive``, and ``sh:maxExclusive``
 *   string constraints, i.e., ``sh:minLength``, ``sh:maxLength``, ``sh:pattern`` with ``sh:flags``, ``sh:languageIn``, and ``sh:uniqueLang``
 *   property-pair constraints, i.e., ``sh:equals``, ``sh:disjoint``, ``sh:lessThan``, and ``sh:lessThanOrEquals``
-*   relaxed shape-based constraints, i.e., ``sh:qualifiedValueShape`` with ``sh:qualifiedMinCount`` and ``sh:qualifiedMaxCount``
+*   qualified value shape constraints, i.e., ``sh:qualifiedValueShape`` with ``sh:qualifiedMinCount`` and ``sh:qualifiedMaxCount``
+*   direct value constraints, i.e., ``sh:hasValue`` and ``sh:in``
+*   closed shapes, i.e., ``sh:closed`` with ``sh:ignoredProperties``
 *   simple SPARQL constraints, i.e., ``sh:sparql`` with ``sh:select``
 
         +   ``sh:prefixes`` is currently not implemented, i.e., the query needs to use full URIs or specify the prefixes within ``sh:select``
         +   ``sh:message`` is ignored, i.e., the message is not included in the result
         +   only ``$this`` is supported as placeholder
-*   simple logical constraints, i.e., ``sh:or``
+*   simple logical constraints, i.e., ``sh:or``, shape-reference ``sh:and``, and atomic property-shape ``sh:not``
 *   inverse paths, i.e., ``sh:path [ sh:inversePath ex:your_predicate ]``
+*   alternative paths and path modifiers, i.e., ``sh:alternativePath``, ``sh:zeroOrMorePath``, ``sh:oneOrMorePath``, and ``sh:zeroOrOnePath``
 *   Trav-SHACL is capable of validating
 
         +   public SPARQL endpoints
@@ -27,8 +30,7 @@ The following is a list of what is supported:
 
 The following is a list of some of the more important features that are not yet covered:
 
-*   ``sh:node``
-*   ``sh:hasValue``
-*   ``sh:and``
-*   ``sh:not``
+*   ``sh:xone``
+*   shape-reference ``sh:not``
+*   full nested shape-expression support for ``sh:and``
 *   and others

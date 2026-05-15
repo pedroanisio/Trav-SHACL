@@ -101,6 +101,9 @@ class Constraint:
     def is_sparql_constraint(self):
         return False
 
+    def is_min_only_constraint(self):
+        return False
+
     def is_max_only_constraint(self):
         return False
 

@@ -45,9 +45,9 @@ The documentation also lists the current [features and limitations](https://sdm-
 
 Trav-SHACL parses supported constraint predicates through an exact SHACL IRI registry and represents SHACL paths with a small path-expression AST before generating SPARQL. The supported target forms include `sh:targetClass`, `sh:targetNode`, `sh:targetSubjectsOf`, `sh:targetObjectsOf`, and implicit targets for node shapes that are also `rdfs:Class`.
 
-Supported path forms currently include predicates, inverse paths, and sequence paths. Unsupported SHACL Core predicates fail explicitly unless parser error handling is configured to ignore unsupported entries.
+Supported path forms currently include predicates, inverse paths, sequence paths, alternative paths, and the SHACL zero-or-more, one-or-more, and zero-or-one path modifiers. Unsupported SHACL Core predicates fail explicitly unless parser error handling is configured to ignore unsupported entries.
 
-The supported SHACL Core constraint families now include cardinality, datatype, value-type (`sh:class`, `sh:nodeKind`), value-range (`sh:minInclusive`, `sh:minExclusive`, `sh:maxInclusive`, `sh:maxExclusive`), string (`sh:minLength`, `sh:maxLength`, `sh:pattern`, `sh:languageIn`, `sh:uniqueLang`), property-pair (`sh:equals`, `sh:disjoint`, `sh:lessThan`, `sh:lessThanOrEquals`), relaxed qualified value shape constraints, simple `sh:or`, and simple `sh:sparql` constraints.
+The supported SHACL Core constraint families now include cardinality, datatype, value-type (`sh:class`, `sh:nodeKind`), value-range (`sh:minInclusive`, `sh:minExclusive`, `sh:maxInclusive`, `sh:maxExclusive`), string (`sh:minLength`, `sh:maxLength`, `sh:pattern`, `sh:languageIn`, `sh:uniqueLang`), property-pair (`sh:equals`, `sh:disjoint`, `sh:lessThan`, `sh:lessThanOrEquals`), qualified value shape constraints, closed shapes, direct value constraints (`sh:hasValue`, `sh:in`), simple logical shape-reference `sh:and`, atomic property-shape `sh:not`, simple `sh:or`, and simple `sh:sparql` constraints. `sh:xone` is recognized but fails fast until the rule engine can represent exact-one shape alternatives.
 
 ## How to run Trav-SHACL?
 You can use Trav-SHACL as a Python3 library or a Web-based service using Docker.

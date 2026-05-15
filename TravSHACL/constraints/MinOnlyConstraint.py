@@ -43,3 +43,6 @@ class MinOnlyConstraint(Constraint):
         """Computes variable names for the SPARQL queries of the constraint."""
         atomic_constraint = Constraint()
         return atomic_constraint.generate_variables(self.varGenerator, VariableType.VALIDATION, self.min)
+
+    def is_min_only_constraint(self):
+        return True

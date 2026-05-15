@@ -286,6 +286,19 @@ class QueryBuilder:
         self.inter_shape_refs: dict[str, Any] = {}
         self.prefix_string = prefix_string
 
+    def sub_builder(self):
+        """Create a nested builder sharing query-shaping flags with this builder."""
+        return QueryBuilder(
+            self.id,
+            None,
+            self.projected_variables,
+            self.include_selectivity,
+            self.target_query,
+            self.constraints,
+            self.include_ORDERBY,
+            self.prefix_string,
+        )
+
     def add_triple(self, path, obj):
         """
         Adds a triple pattern to the constraint query.

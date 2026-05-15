@@ -1,15 +1,20 @@
 import pytest
 from rdflib import Graph
 from TravSHACL.constraints.ClassConstraint import ClassConstraint
+from TravSHACL.constraints.ClosedConstraint import ClosedConstraint
+from TravSHACL.constraints.HasValueConstraint import HasValueConstraint
+from TravSHACL.constraints.InConstraint import InConstraint
 from TravSHACL.constraints.LanguageInConstraint import LanguageInConstraint
 from TravSHACL.constraints.NodeKindConstraint import NodeKindConstraint
 from TravSHACL.constraints.PairEqualsConstraint import PairEqualsConstraint
+from TravSHACL.constraints.QualifiedValueShapeConstraint import QualifiedValueShapeConstraint
 from TravSHACL.constraints.RangeMinInclusiveConstraint import RangeMinInclusiveConstraint
 from TravSHACL.constraints.UniqueLangConstraint import UniqueLangConstraint
 from TravSHACL.core.GraphTraversal import GraphTraversal
-from TravSHACL.core.Path import Predicate
+from TravSHACL.core.Path import Alternative, OneOrMore, Predicate, ZeroOrMore, ZeroOrOne
 from TravSHACL.core.ShapeParser import CONSTRAINT_DISPATCH, NAMESPACE_SHACL, ShapeParser
 from TravSHACL.core.ShapeSchema import ShapeSchema
+from TravSHACL.sparql.SPARQLEndpoint import SPARQLEndpoint
 
 EXPECTED_IRIS = {
     "path",
@@ -352,6 +357,206 @@ def test_pair_constraint_uses_referenced_property_not_shape_ref():
     assert constraint.get_shape_ref() is None
     assert constraint.referenced_property_sparql() == "<http://test.example.com/property2>"
     assert shape.get_shape_refs() == []
+
+
+def test_extended_shacl_paths_are_parsed_from_turtle_blank_nodes():
+    source = """
+        @prefix sh: <http://www.w3.org/ns/shacl#> .
+        @prefix test: <http://test.example.com/> .
+        @prefix : <http://test.example.com/shapes/> .
+
+        :ClassA a sh:NodeShape ;
+          sh:targetClass test:ClassA ;
+          sh:property [
+            sh:path [ sh:alternativePath ( test:p1 test:p2 ) ] ;
+            sh:minCount 1
+          ] ;
+          sh:property [
+            sh:path [ sh:zeroOrMorePath test:p3 ] ;
+            sh:minCount 1
+          ] ;
+          sh:property [
+            sh:path [ sh:oneOrMorePath test:p4 ] ;
+            sh:minCount 1
+          ] ;
+          sh:property [
+            sh:path [ sh:zeroOrOnePath test:p5 ] ;
+            sh:minCount 1
+          ] .
+    """
+
+    paths = [constraint.path for constraint in _parse_ttl(source)[0].get_constraints()]
+
+    assert [type(path) for path in paths] == [Alternative, ZeroOrMore, OneOrMore, ZeroOrOne]
+    assert paths[0].to_sparql() == "(<http://test.example.com/p1>|<http://test.example.com/p2>)"
+    assert paths[1].to_sparql() == "<http://test.example.com/p3>*"
+    assert paths[2].to_sparql() == "<http://test.example.com/p4>+"
+    assert paths[3].to_sparql() == "<http://test.example.com/p5>?"
+
+
+def test_qualified_value_shape_uses_dedicated_constraint_not_plain_cardinality():
+    source = """
+        @prefix sh: <http://www.w3.org/ns/shacl#> .
+        @prefix test: <http://test.example.com/> .
+        @prefix : <http://test.example.com/shapes/> .
+
+        :ClassA a sh:NodeShape ;
+          sh:targetClass test:ClassA ;
+          sh:property [
+            sh:path test:toB ;
+            sh:qualifiedValueShape [ sh:node :ClassB ] ;
+            sh:qualifiedMinCount 1 ;
+            sh:qualifiedMaxCount 2
+          ] .
+
+        :ClassB a sh:NodeShape ;
+          sh:targetClass test:ClassB .
+    """
+
+    constraints = _parse_ttl(source)[0].get_constraints()
+
+    assert [type(constraint) for constraint in constraints] == [
+        QualifiedValueShapeConstraint,
+        QualifiedValueShapeConstraint,
+    ]
+    assert constraints[0].get_shape_ref() == "<http://test.example.com/shapes/ClassB>"
+    assert constraints[0].min == 1
+    assert constraints[0].max == -1
+    assert constraints[1].min == -1
+    assert constraints[1].max == 2
+
+
+def test_closed_has_value_and_in_constraints_are_parsed():
+    source = """
+        @prefix sh: <http://www.w3.org/ns/shacl#> .
+        @prefix test: <http://test.example.com/> .
+        @prefix : <http://test.example.com/shapes/> .
+
+        :ClassA a sh:NodeShape ;
+          sh:targetClass test:ClassA ;
+          sh:closed true ;
+          sh:ignoredProperties ( test:ignored ) ;
+          sh:property [
+            sh:path test:status ;
+            sh:hasValue "active" ;
+            sh:in ( "active" "pending" )
+          ] .
+    """
+
+    constraints = _parse_ttl(source)[0].get_constraints()
+
+    assert [type(constraint) for constraint in constraints] == [ClosedConstraint, HasValueConstraint, InConstraint]
+    assert constraints[0].allowedPaths == ("<http://test.example.com/status>",)
+    assert constraints[0].ignoredProperties == ("<http://test.example.com/ignored>",)
+    assert constraints[1].get_value() == '"active"'
+    assert constraints[2].get_value() == ('"active"', '"pending"')
+
+
+def test_closed_has_value_and_in_constraints_validate_graph(tmp_path):
+    SPARQLEndpoint.instance = None
+    schema_dir = tmp_path / "shapes"
+    schema_dir.mkdir()
+    (schema_dir / "Thing.ttl").write_text(
+        """
+        @prefix sh: <http://www.w3.org/ns/shacl#> .
+        @prefix test: <http://test.example.com/> .
+        @prefix : <http://test.example.com/shapes/> .
+
+        :Thing a sh:NodeShape ;
+          sh:targetClass test:Thing ;
+          sh:closed true ;
+          sh:ignoredProperties ( test:ignored ) ;
+          sh:property [
+            sh:path test:status ;
+            sh:hasValue "active" ;
+            sh:in ( "active" "pending" )
+          ] .
+        """,
+        encoding="utf-8",
+    )
+    data = Graph().parse(
+        data="""
+        @prefix test: <http://test.example.com/> .
+
+        test:GoodThing a test:Thing ;
+          test:status "active" ;
+          test:ignored "ok" .
+
+        test:MissingRequiredStatus a test:Thing ;
+          test:ignored "ok" .
+
+        test:BadStatusThing a test:Thing ;
+          test:status "archived" .
+
+        test:ExtraPropertyThing a test:Thing ;
+          test:status "active" ;
+          test:extra "not allowed" .
+        """,
+        format="ttl",
+    )
+
+    result = ShapeSchema(
+        schema_dir=str(schema_dir),
+        schema_format="SHACL",
+        endpoint=data,
+        graph_traversal=GraphTraversal.BFS,
+        heuristics=None,
+        use_selective_queries=True,
+        max_split_size=256,
+        output_dir=None,
+        order_by_in_queries=False,
+        save_outputs=False,
+    ).validate()
+
+    valid = sorted(instance[1] for values in result.values() for instance in values.get("valid_instances", []))
+    invalid = sorted(instance[1] for values in result.values() for instance in values.get("invalid_instances", []))
+
+    assert valid == ["http://test.example.com/GoodThing"]
+    assert invalid == [
+        "http://test.example.com/BadStatusThing",
+        "http://test.example.com/ExtraPropertyThing",
+        "http://test.example.com/MissingRequiredStatus",
+    ]
+    SPARQLEndpoint.instance = None
+
+
+def test_shape_reference_not_raises_not_implemented():
+    source = """
+        @prefix sh: <http://www.w3.org/ns/shacl#> .
+        @prefix test: <http://test.example.com/> .
+        @prefix : <http://test.example.com/shapes/> .
+
+        :ClassA a sh:NodeShape ;
+          sh:targetClass test:ClassA ;
+          sh:not :ClassB .
+
+        :ClassB a sh:NodeShape ;
+          sh:targetClass test:ClassB .
+    """
+
+    with pytest.raises(NotImplementedError, match="Shape-reference sh:not"):
+        _parse_ttl(source)
+
+
+def test_xone_raises_not_implemented_instead_of_silent_and_semantics():
+    source = """
+        @prefix sh: <http://www.w3.org/ns/shacl#> .
+        @prefix test: <http://test.example.com/> .
+        @prefix : <http://test.example.com/shapes/> .
+
+        :ClassA a sh:NodeShape ;
+          sh:targetClass test:ClassA ;
+          sh:xone ( :ClassB :ClassC ) .
+
+        :ClassB a sh:NodeShape ;
+          sh:targetClass test:ClassB .
+
+        :ClassC a sh:NodeShape ;
+          sh:targetClass test:ClassC .
+    """
+
+    with pytest.raises(NotImplementedError, match="sh:xone"):
+        _parse_ttl(source)
 
 
 def test_language_in_and_unique_lang_validate_language_tagged_literals(tmp_path):

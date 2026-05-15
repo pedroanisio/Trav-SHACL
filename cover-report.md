@@ -14,10 +14,10 @@ Verdicts below are derived structurally from `TravSHACL/core/ShapeParser.py` (th
 
 ## Method (how this was determined)
 
-- **Parser truth table** — `parse_all_const` (`ShapeParser.py:368-445`) only writes into a fixed-key dict: `min`, `max`, `value`, `path`, `shape`, `datatype`, `negated`, `or`, `flag`, `sparql`. Any SHACL property whose local name does not lowercase-match `'min'`, `'max'`, `'path'`, `'datatype'`, `'valueshape'`, `'not'`, or land in the `sh:or`/`sh:sparql` SPARQL probes (`get_QUERY:241-309`) is silently dropped (or raises `NotImplementedError` if `ignore_errors=False`, see `get_res:311-366`).
-- **TTL probe set** — the parser issues exactly these SHACL-vocabulary queries: `sh:NodeShape`, `sh:targetClass`, `sh:targetNode`, `sh:targetQuery`, `sh:property`, `sh:path` (with `sh:inversePath` and `rdf:rest*/rdf:first` list-walking branches), `sh:node`, `sh:value`, `sh:sparql/sh:select`, `sh:or`. That is the complete set of SHACL IRIs the engine knows.
-- **Constraint classes** — only 4 concrete subclasses of `Constraint`: `MinOnlyConstraint`, `MaxOnlyConstraint`, `MinMaxConstraint`, `SPARQLConstraint`. Each holds `(min, max, path, datatype, value, shape_ref, is_pos, options)`. No other constraint types exist.
-- **Fixture taxonomy** — directories under `tests/cases/`: `single_shape`, `two_shapes`, `inverse_path`, `or_constraint`, `recursion`, `sparql_constraint`. No fixture exists for class-pair, pattern, language, list, qualified-value-shape min/max, logical NOT/AND/XONE, etc.
+- **Parser truth table** — `CONSTRAINT_DISPATCH` in `TravSHACL/core/ShapeParser.py` now maps exact SHACL IRIs into fixed internal keys. Unknown SHACL predicates raise `NotImplementedError` unless `ignore_errors=True`.
+- **TTL probe set** — the parser enumerates node and property shapes, target forms, property constraints, shape-level logical/closed constraints, SPARQL constraints, and RDF-structured path expressions through `parse_path_node`.
+- **Constraint classes** — the hierarchy now includes dedicated classes for value-type, value-range, string, property-pair, qualified value shape, direct value, closed, and selected logical constraints. Query emission remains polymorphic through `Constraint.emit_filter`.
+- **Fixture taxonomy** — regression coverage includes parser/AST/drift tests plus the existing full fixture matrix. Local RDFLib graph validation passed for the non-HTTP axis on 2026-05-15.
 
 ## 1. Targets (SHACL §2.1)
 
@@ -26,22 +26,22 @@ Verdicts below are derived structurally from `TravSHACL/core/ShapeParser.py` (th
 | Class target | `sh:targetClass` | ✅ | `QUERY_TARGET_1` in `get_QUERY:241-309`; `target_type = 'class'` |
 | Node target | `sh:targetNode` | ✅ | `QUERY_TARGET_2` (same block); `target_type = 'node'` |
 | Custom SPARQL target | `sh:targetQuery` | ✅ (non-standard extension) | `QUERY_TARGET_QUERY` literal at top of `ShapeParser.py`; also `targetDef.query` in JSON |
-| Subjects-of target | `sh:targetSubjectsOf` | ❌ | No probe issued |
-| Objects-of target | `sh:targetObjectsOf` | ❌ | No probe issued |
-| Implicit class target (`rdfs:Class` + NodeShape) | implicit | ❌ | Only `sh:NodeShape` is queried as the shape selector |
+| Subjects-of target | `sh:targetSubjectsOf` | ✅ | `QUERY_TARGET_SUBJECTS_OF`; fixtures: `tests/cases/target_subjects_of/` |
+| Objects-of target | `sh:targetObjectsOf` | ✅ | `QUERY_TARGET_OBJECTS_OF`; fixtures: `tests/cases/target_objects_of/` |
+| Implicit class target (`rdfs:Class` + NodeShape) | implicit | ✅ | `QUERY_IMPLICIT_CLASS`; fixtures: `tests/cases/implicit_class/` |
 
 ## 2. Shape types (SHACL §2.2)
 
 | Spec feature | Support | Evidence |
 |---|---|---|
 | `sh:NodeShape` (top-level) | ✅ | `QUERY_SHAPES` selects only `?shape a sh:NodeShape` |
-| `sh:PropertyShape` (top-level) | ❌ | Never enumerated; the parser walks `sh:property` blank nodes hanging off a NodeShape but does not treat property shapes as first-class targets |
+| `sh:PropertyShape` (top-level) | ✅ | `QUERY_SHAPES` selects NodeShape and PropertyShape entries; fixtures: `tests/cases/property_shape/` |
 | Inline blank-node shapes via `sh:property` | ⚠ Partial | Walked, but only the recognized predicates inside are kept |
 | Nested `sh:node` reference | ✅ | `QUERY_QVS_REF_1` (`sh:node`) — produces `shape_ref` |
-| `sh:and` | ❌ | No probe; conjunction is implicit (all properties on a NodeShape are AND'd, but explicit `sh:and` lists are not parsed) |
+| `sh:and` | ✅ subset | Shape-reference lists compile to `AndConstraint`; nested arbitrary shape expressions remain limited |
 | `sh:or` | ✅ (NodeShape-level) | `QUERY_OR` + the `dk == "Graph.items"` branch in `parse_all_const` |
-| `sh:xone` | ❌ | No probe |
-| `sh:not` | ⚠ Partial via `negated` flag | `'not' in str(i[0]).lower()` in `parse_all_const`; surfaces as `is_pos=False` on min/max constraints. No first-class negation operator — only inversion of cardinality constraints. |
+| `sh:xone` | ❌ | Recognized by dispatch but raises `NotImplementedError` to avoid silently behaving like `sh:and` |
+| `sh:not` | ✅ subset | Atomic property-shape negation compiles to `NotConstraint`; shape-reference `sh:not` fails fast with `NotImplementedError` |
 
 ## 3. Property paths (SHACL §2.3)
 
@@ -49,11 +49,11 @@ Verdicts below are derived structurally from `TravSHACL/core/ShapeParser.py` (th
 |---|---|---|---|
 | Predicate (atomic) | IRI | ✅ | Default branch in `QUERY_CONSTRAINT_DETAILS` |
 | Inverse path | `sh:inversePath` | ✅ | Dedicated UNION branch: `?s sh:path/sh:inversePath ?o … BIND(CONCAT('^', str(?o)) AS ?o)` — fixtures: `tests/cases/inverse_path/case{1,2}` |
-| Sequence path | RDF list of paths | ⚠ Partial | The third UNION branch walks `rdf:rest*/rdf:first` and `group_concat`s with `/` separator. Works for lists of plain IRIs only; nested inverse/alternative paths in a list are not handled. |
-| Alternative path | `sh:alternativePath` | ❌ | No probe; would land in the unsupported feature branch of `get_res` |
-| Zero-or-more path | `sh:zeroOrMorePath` | ❌ | Not recognized |
-| One-or-more path | `sh:oneOrMorePath` | ❌ | Not recognized |
-| Zero-or-one path | `sh:zeroOrOnePath` | ❌ | Not recognized |
+| Sequence path | RDF list of paths | ✅ | `parse_path_node` creates `Sequence` recursively |
+| Alternative path | `sh:alternativePath` | ✅ | `parse_path_node` creates `Alternative` |
+| Zero-or-more path | `sh:zeroOrMorePath` | ✅ | `parse_path_node` creates `ZeroOrMore` |
+| One-or-more path | `sh:oneOrMorePath` | ✅ | `parse_path_node` creates `OneOrMore` |
+| Zero-or-one path | `sh:zeroOrOnePath` | ✅ | `parse_path_node` creates `ZeroOrOne` |
 
 ## 4. Core constraint components (SHACL §4)
 
@@ -68,43 +68,43 @@ Verdicts below are derived structurally from `TravSHACL/core/ShapeParser.py` (th
 
 | Constraint | IRI | Support | Evidence |
 |---|---|---|---|
-| Datatype | `sh:datatype` | ⚠ Stored, partially enforced | `'datatype' in str(i[0]).lower()`; stored on `Constraint.datatype` and surfaced as a filter in `QueryBuilder.add_datatype_filter`. Only filters in the generated SPARQL; no separate `DatatypeConstraint` class. |
-| Node kind | `sh:nodeKind` | ❌ | Not in the recognized-keys table |
-| Class | `sh:class` | ❌ | Not in the table — only `sh:targetClass` (a target, not a value constraint) |
+| Datatype | `sh:datatype` | ✅ | Exact dispatch key; enforced through datatype filters |
+| Node kind | `sh:nodeKind` | ✅ | `NodeKindConstraint`; parser rejects unsupported node kinds |
+| Class | `sh:class` | ✅ | `ClassConstraint` with subclass traversal |
 
 ### 4.3 Value-range constraints
 
 | Constraint | IRI | Support | Evidence |
 |---|---|---|---|
-| `sh:minInclusive` / `sh:maxInclusive` | — | ❌ | Substring `'min'`/`'max'` actually matches these property local names too, but the parser treats them as cardinality counts (writes into `trav_dict['min']` / `['max']`) and feeds them to a `MinOnly`/`MaxOnly`/`MinMaxConstraint`. **This is a latent bug**: a shape with `sh:minInclusive 18` would be parsed as `sh:minCount 18`. |
-| `sh:minExclusive` / `sh:maxExclusive` | — | ❌ | Same latent collision |
+| `sh:minInclusive` / `sh:maxInclusive` | — | ✅ | `RangeMinInclusiveConstraint` / `RangeMaxInclusiveConstraint` |
+| `sh:minExclusive` / `sh:maxExclusive` | — | ✅ | `RangeMinExclusiveConstraint` / `RangeMaxExclusiveConstraint` |
 
 ### 4.4 String-based constraints
 
 | Constraint | IRI | Support |
 |---|---|---|
-| `sh:minLength` / `sh:maxLength` | — | ❌ (collides with cardinality keys — same bug) |
-| `sh:pattern` | — | ❌ |
-| `sh:languageIn` | — | ❌ |
-| `sh:uniqueLang` | — | ❌ |
+| `sh:minLength` / `sh:maxLength` | — | ✅ |
+| `sh:pattern` | — | ✅ |
+| `sh:languageIn` | — | ✅ |
+| `sh:uniqueLang` | — | ✅ |
 
 ### 4.5 Property-pair constraints
 
 | Constraint | IRI | Support |
 |---|---|---|
-| `sh:equals` | — | ❌ |
-| `sh:disjoint` | — | ❌ |
-| `sh:lessThan` | — | ❌ |
-| `sh:lessThanOrEquals` | — | ❌ |
+| `sh:equals` | — | ✅ |
+| `sh:disjoint` | — | ✅ |
+| `sh:lessThan` | — | ✅ |
+| `sh:lessThanOrEquals` | — | ✅ |
 
 ### 4.6 Logical constraints
 
 | Constraint | IRI | Support |
 |---|---|---|
-| `sh:and` | — | ❌ (implicit conjunction only) |
+| `sh:and` | — | ✅ subset: shape-reference lists |
 | `sh:or` | — | ✅ (NodeShape level, via `QUERY_OR`) |
-| `sh:not` | — | ⚠ Polarity flip only (`negated` key); cannot negate arbitrary shapes |
-| `sh:xone` | — | ❌ |
+| `sh:not` | — | ✅ subset: atomic property-shape negation; shape-reference negation is explicit `NotImplementedError` |
+| `sh:xone` | — | ❌ fail-fast `NotImplementedError` |
 
 ### 4.7 Shape-based constraints
 
@@ -112,17 +112,17 @@ Verdicts below are derived structurally from `TravSHACL/core/ShapeParser.py` (th
 |---|---|---|---|
 | `sh:node` | — | ✅ | `QUERY_QVS_REF_1` — produces a `shape_ref` (used to build the shape-dependency graph) |
 | `sh:property` | — | ✅ | `QUERY_CONSTRAINTS` |
-| `sh:qualifiedValueShape` | — | ❌ | Not recognized |
-| `sh:qualifiedMinCount` / `sh:qualifiedMaxCount` | — | ❌ | Lexical-substring collision with `sh:minCount`/`sh:maxCount` — same bug as 4.3 |
-| `sh:qualifiedValueShapesDisjoint` | — | ❌ | |
+| `sh:qualifiedValueShape` | — | ✅ | `QualifiedValueShapeConstraint` |
+| `sh:qualifiedMinCount` / `sh:qualifiedMaxCount` | — | ✅ | Qualified min/max are dedicated parser keys, not aliases |
+| `sh:qualifiedValueShapesDisjoint` | — | ⚠ Parsed | Key is recognized; disjoint-specific semantics are not separately enforced |
 
 ### 4.8 Other
 
 | Constraint | IRI | Support |
 |---|---|---|
-| `sh:closed` + `sh:ignoredProperties` | — | ❌ |
-| `sh:hasValue` | — | ⚠ `'valueshape' in str(i[0]).lower()` catches `sh:value` indirectly through the QVS-ref path; direct `sh:hasValue` is not in the table. Result: stored, but enforcement path is murky. |
-| `sh:in` (enumerated values) | — | ❌ |
+| `sh:closed` + `sh:ignoredProperties` | — | ✅ |
+| `sh:hasValue` | — | ✅ |
+| `sh:in` (enumerated values) | — | ✅ |
 
 ## 5. SPARQL-based constraints (SHACL §5)
 
@@ -170,25 +170,18 @@ These are features the SHACL specification does not define but Trav-SHACL ships:
 
 ## 9. Summary verdict
 
-**Implemented (core spec):** `sh:NodeShape`, `sh:targetClass`, `sh:targetNode`, `sh:property`, `sh:path` (atomic, inverse, simple sequence), `sh:minCount`, `sh:maxCount`, `sh:datatype` (filter only), `sh:node`, `sh:or` (NodeShape level), `sh:sparql`/`sh:select`, an `is_pos` flip when `sh:not` is lexically present.
+**Implemented (core spec):** `sh:NodeShape`, `sh:PropertyShape`, core target forms, common property paths, cardinality, datatype, value-type, value-range, string, property-pair, qualified value-shape, closed, direct value, and selected logical constraints, plus `sh:sparql`/`sh:select`.
 
 **Missing or unsafe:**
 
-- All non-cardinality numeric / string / language / pattern constraints (4.3–4.4).
-- All property-pair constraints (4.5).
-- `sh:and`, `sh:xone`, full `sh:not` (4.6).
-- All qualified-value-shape constraints (4.7).
-- `sh:closed`, `sh:hasValue` (direct), `sh:in`.
-- `sh:targetSubjectsOf`, `sh:targetObjectsOf`, implicit class targets.
-- Most path expressions: `sh:alternativePath`, `sh:zeroOrMore`, `sh:oneOrMore`, `sh:zeroOrOne`.
+- `sh:xone`.
+- Full nested shape-expression semantics for `sh:and`.
+- Shape-reference `sh:not`.
+- Dedicated `sh:qualifiedValueShapesDisjoint` behavior.
 - Severity / messages / deactivation / metadata.
 - Standard validation report serialization.
 - `sh:prefixes`/`sh:declare` for SPARQL constraints; `sh:ask`; user-defined `sh:SPARQLConstraintComponent`.
 
-**Latent correctness risk:** the parser dispatch is lexical-substring on lowercased local names in `parse_all_const` (`ShapeParser.py:368-445`). This means:
+**Latent correctness risk:** the remaining risks are no longer lexical dispatch collisions; they are semantic subset boundaries. The most important are shape-reference negation, full nested logical expression support, qualified-disjoint semantics, and SHACL-conformant validation report serialization.
 
-- `sh:minInclusive`, `sh:minExclusive`, `sh:minLength`, `sh:qualifiedMinCount` all collide with `'min'` → silently interpreted as `sh:minCount`.
-- Same for the `'max'` family.
-- `sh:hasValue` does not collide with the recognized `'valueshape'` key, so it is dropped or raises `NotImplementedError` (depending on `ignore_errors`).
-
-**Bottom line:** Trav-SHACL implements a deliberately narrow slice of SHACL Core — cardinality + shape-references + raw-SPARQL escape hatch — and is built around algorithmic contributions (traversal-order heuristics and rule-based recursion semantics) rather than spec completeness. For a validator targeting full spec compliance, prefer `pyshacl` or Apache Jena SHACL; for shape-graph-aware federation/traversal experiments on a SPARQL endpoint, Trav-SHACL fills a niche the spec-conformant tools do not.
+**Bottom line:** Trav-SHACL now covers the main SHACL Core validation families used by its fixture suite while preserving its algorithmic focus on traversal-order heuristics and rule-based recursion semantics. Phase 3 should focus on standard report serialization and JSON-format parity for the newly added Turtle-only constraints.

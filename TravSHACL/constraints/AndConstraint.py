@@ -1,0 +1,22 @@
+__author__ = "Monica Figuera and Philipp D. Rohde"
+
+from TravSHACL.constraints.Constraint import Constraint
+from TravSHACL.utils.VariableGenerator import VariableGenerator
+
+
+class AndConstraint(Constraint):
+    """Represents sh:and over referenced node shapes."""
+
+    def __init__(self, id_, shape_refs, is_pos, options, target_def=None):
+        super().__init__(id_, is_pos, None, None, None, None, target_def, None, options)
+        self.shapeRefs = tuple(shape_refs)
+        self.min = 1
+        self.max = -1
+        self.variables = [VariableGenerator.get_focus_node_var()]
+
+    def emit_filter(self, builder, focus_var, or_value: int = 0, or_affix: int = 0, maxonly: bool = False):
+        builder.triples.append("BIND(?" + focus_var + " AS ?" + focus_var + ")")
+
+    def compute_rule_pattern_body(self):
+        focus_var = VariableGenerator.get_focus_node_var()
+        return [(shape_ref, focus_var, self.isPos) for shape_ref in self.shapeRefs]

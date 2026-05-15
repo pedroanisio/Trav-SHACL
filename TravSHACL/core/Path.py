@@ -76,6 +76,55 @@ class Sequence(PathExpression):
         return self.to_sparql()
 
 
+@dataclass(frozen=True)
+class Alternative(PathExpression):
+    paths: tuple[PathExpression, ...]
+
+    def __init__(self, paths: Iterable[PathExpression]):
+        object.__setattr__(self, "paths", tuple(paths))
+        if len(self.paths) < 2:
+            raise ValueError("Alternative path requires at least two options")
+
+    def to_sparql(self) -> str:
+        return "(" + "|".join(path.to_sparql() for path in self.paths) + ")"
+
+    def __str__(self) -> str:
+        return self.to_sparql()
+
+
+@dataclass(frozen=True)
+class ZeroOrMore(PathExpression):
+    path: PathExpression
+
+    def to_sparql(self) -> str:
+        return self.path.to_sparql() + "*"
+
+    def __str__(self) -> str:
+        return self.to_sparql()
+
+
+@dataclass(frozen=True)
+class OneOrMore(PathExpression):
+    path: PathExpression
+
+    def to_sparql(self) -> str:
+        return self.path.to_sparql() + "+"
+
+    def __str__(self) -> str:
+        return self.to_sparql()
+
+
+@dataclass(frozen=True)
+class ZeroOrOne(PathExpression):
+    path: PathExpression
+
+    def to_sparql(self) -> str:
+        return self.path.to_sparql() + "?"
+
+    def __str__(self) -> str:
+        return self.to_sparql()
+
+
 def _split_sequence(path: str) -> list[str]:
     parts = []
     start = 0

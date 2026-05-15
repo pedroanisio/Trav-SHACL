@@ -5,8 +5,6 @@ import time
 
 from SPARQLWrapper import SPARQLWrapper
 
-from TravSHACL.constraints.MaxOnlyConstraint import MaxOnlyConstraint
-from TravSHACL.constraints.MinOnlyConstraint import MinOnlyConstraint
 from TravSHACL.sparql.QueryGenerator import get_target_node_statement
 from TravSHACL.sparql.SPARQLEndpoint import SPARQLEndpoint
 
@@ -178,12 +176,12 @@ class InstancesRetrieval:
                 instance = b["x"]["value"]
                 cardinality = int(b["cnt"]["value"])
 
-                if isinstance(constraint, MinOnlyConstraint):
+                if constraint.is_min_only_constraint():
                     if cardinality < constraint.min:
                         inv_targets.update([(shape.id, instance, True)])
                     else:
                         pending_targets.update([(shape.id, instance, True)])
-                elif isinstance(constraint, MaxOnlyConstraint):
+                elif constraint.is_max_only_constraint():
                     if cardinality > constraint.max:
                         inv_targets.update([(shape.id, instance, True)])
                     else:
