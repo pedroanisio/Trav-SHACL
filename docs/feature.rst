@@ -7,6 +7,10 @@ The following is a list of what is supported:
 
 *   simple cardinality constraints, i.e., ``sh:minCount`` and ``sh:maxCount``
 *   datatype constraints, i.e., ``sh:datatype``
+*   value-type constraints, i.e., ``sh:class`` and ``sh:nodeKind``
+*   value-range constraints, i.e., ``sh:minInclusive``, ``sh:minExclusive``, ``sh:maxInclusive``, and ``sh:maxExclusive``
+*   string constraints, i.e., ``sh:minLength``, ``sh:maxLength``, ``sh:pattern`` with ``sh:flags``, ``sh:languageIn``, and ``sh:uniqueLang``
+*   property-pair constraints, i.e., ``sh:equals``, ``sh:disjoint``, ``sh:lessThan``, and ``sh:lessThanOrEquals``
 *   relaxed shape-based constraints, i.e., ``sh:qualifiedValueShape`` with ``sh:qualifiedMinCount`` and ``sh:qualifiedMaxCount``
 *   simple SPARQL constraints, i.e., ``sh:sparql`` with ``sh:select``
 

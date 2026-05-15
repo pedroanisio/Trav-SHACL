@@ -237,10 +237,24 @@ def test_test_endpoint_contract_matches_compose_and_ci():
 
 
 def test_constraint_dispatch_stays_polymorphic():
-    forbidden = {"Constraint", "MinOnlyConstraint", "MaxOnlyConstraint", "MinMaxConstraint", "SPARQLConstraint"}
+    checked_paths = [
+        "TravSHACL/sparql/QueryGenerator.py",
+        "TravSHACL/core/Shape.py",
+        "TravSHACL/rule_based_validation/Validation.py",
+        "TravSHACL/rule_based_validation/InstancesRetrieval.py",
+    ]
+    allowed = {
+        "MinOnlyConstraint",
+        "MaxOnlyConstraint",
+    }
+    offenders = {
+        name
+        for path in checked_paths
+        for name in _isinstance_type_names(path)
+        if name.endswith("Constraint") and name not in allowed
+    }
 
-    assert _isinstance_type_names("TravSHACL/sparql/QueryGenerator.py").isdisjoint(forbidden)
-    assert _isinstance_type_names("TravSHACL/core/Shape.py").isdisjoint(forbidden)
+    assert offenders == set()
 
 
 def test_feature_claims_have_source_or_fixture_evidence():
@@ -275,6 +289,28 @@ def test_feature_claims_have_source_or_fixture_evidence():
         "inverse paths": (
             ["sh:inversePath"],
             ["sh:inversePath"],
+        ),
+        "value-type constraints": (
+            ["``sh:class``", "``sh:nodeKind``"],
+            ["sh:class", "sh:nodeKind", "ClassConstraint", "NodeKindConstraint"],
+        ),
+        "value-range constraints": (
+            ["``sh:minInclusive``", "``sh:maxExclusive``"],
+            ["sh:minInclusive", "sh:maxExclusive", "RangeMinInclusiveConstraint", "RangeMaxExclusiveConstraint"],
+        ),
+        "string constraints": (
+            ["``sh:minLength``", "``sh:pattern``", "``sh:languageIn``", "``sh:uniqueLang``"],
+            [
+                "sh:minLength",
+                "sh:pattern",
+                'NAMESPACE_SHACL + "languageIn"',
+                'NAMESPACE_SHACL + "uniqueLang"',
+                "PatternConstraint",
+            ],
+        ),
+        "property-pair constraints": (
+            ["``sh:equals``", "``sh:disjoint``", "``sh:lessThan``", "``sh:lessThanOrEquals``"],
+            ["sh:equals", "sh:disjoint", "sh:lessThan", "sh:lessThanOrEquals", "PairLessThanConstraint"],
         ),
         "private SPARQL endpoints": (
             ["private SPARQL endpoints via HTTP Basic Auth"],

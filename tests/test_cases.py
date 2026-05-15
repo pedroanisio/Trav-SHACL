@@ -31,10 +31,22 @@ def test_case(file, selective, graph_traversal, prio_target, prio_degree, prio_n
     if "or_constraint" in file and shape_format == "JSON":
         pytest.skip("OR constraints in JSON format are not implemented.")
     if (
-        any(feature in file for feature in ["target_subjects_of", "target_objects_of", "implicit_class"])
+        any(
+            feature in file
+            for feature in [
+                "target_subjects_of",
+                "target_objects_of",
+                "implicit_class",
+                "class_constraint",
+                "nodekind_constraint",
+                "value_range",
+                "string_constraints",
+                "pair_constraints",
+            ]
+        )
         and shape_format == "JSON"
     ):
-        pytest.skip("These SHACL target forms are covered by Turtle fixtures only.")
+        pytest.skip("These SHACL forms are covered by Turtle fixtures only.")
 
     with open(file) as f:
         test_definition = json.load(f)

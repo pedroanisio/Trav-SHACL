@@ -11,9 +11,24 @@ from urllib.parse import urlparse
 import rdflib.term
 from rdflib import Graph
 
+from TravSHACL.constraints.ClassConstraint import ClassConstraint
+from TravSHACL.constraints.LanguageInConstraint import LanguageInConstraint
+from TravSHACL.constraints.MaxLengthConstraint import MaxLengthConstraint
 from TravSHACL.constraints.MaxOnlyConstraint import MaxOnlyConstraint
+from TravSHACL.constraints.MinLengthConstraint import MinLengthConstraint
 from TravSHACL.constraints.MinOnlyConstraint import MinOnlyConstraint
+from TravSHACL.constraints.NodeKindConstraint import NodeKindConstraint
+from TravSHACL.constraints.PairDisjointConstraint import PairDisjointConstraint
+from TravSHACL.constraints.PairEqualsConstraint import PairEqualsConstraint
+from TravSHACL.constraints.PairLessThanConstraint import PairLessThanConstraint
+from TravSHACL.constraints.PairLessThanOrEqualsConstraint import PairLessThanOrEqualsConstraint
+from TravSHACL.constraints.PatternConstraint import PatternConstraint
+from TravSHACL.constraints.RangeMaxExclusiveConstraint import RangeMaxExclusiveConstraint
+from TravSHACL.constraints.RangeMaxInclusiveConstraint import RangeMaxInclusiveConstraint
+from TravSHACL.constraints.RangeMinExclusiveConstraint import RangeMinExclusiveConstraint
+from TravSHACL.constraints.RangeMinInclusiveConstraint import RangeMinInclusiveConstraint
 from TravSHACL.constraints.SPARQLConstraint import SPARQLConstraint
+from TravSHACL.constraints.UniqueLangConstraint import UniqueLangConstraint
 from TravSHACL.core.Path import PathExpression
 from TravSHACL.core.Shape import Shape
 from TravSHACL.utils.VariableGenerator import VariableGenerator
@@ -36,6 +51,21 @@ CONSTRAINT_DISPATCH = {
     NAMESPACE_SHACL + "node": "shape",
     NAMESPACE_SHACL + "value": "value",
     NAMESPACE_SHACL + "not": "negated",
+    NAMESPACE_SHACL + "class": "class",
+    NAMESPACE_SHACL + "nodeKind": "nodeKind",
+    NAMESPACE_SHACL + "minInclusive": "minInclusive",
+    NAMESPACE_SHACL + "minExclusive": "minExclusive",
+    NAMESPACE_SHACL + "maxInclusive": "maxInclusive",
+    NAMESPACE_SHACL + "maxExclusive": "maxExclusive",
+    NAMESPACE_SHACL + "minLength": "minLength",
+    NAMESPACE_SHACL + "maxLength": "maxLength",
+    NAMESPACE_SHACL + "pattern": "pattern",
+    NAMESPACE_SHACL + "languageIn": "languageIn",
+    NAMESPACE_SHACL + "uniqueLang": "uniqueLang",
+    NAMESPACE_SHACL + "equals": "equals",
+    NAMESPACE_SHACL + "disjoint": "disjoint",
+    NAMESPACE_SHACL + "lessThan": "lessThan",
+    NAMESPACE_SHACL + "lessThanOrEquals": "lessThanOrEquals",
 }
 
 METADATA_DISPATCH = {
@@ -355,6 +385,33 @@ class ShapeParser:
         return value
 
     @staticmethod
+    def sparql_literal(value):
+        if isinstance(value, rdflib.term.Literal):
+            lexical = json.dumps(str(value))
+            if value.language:
+                return lexical + "@" + value.language
+            if value.datatype:
+                return lexical + "^^<" + str(value.datatype) + ">"
+            return lexical
+        return str(value)
+
+    @staticmethod
+    def constraint_value(predicate, value):
+        literal_predicates = {
+            NAMESPACE_SHACL + "minInclusive",
+            NAMESPACE_SHACL + "minExclusive",
+            NAMESPACE_SHACL + "maxInclusive",
+            NAMESPACE_SHACL + "maxExclusive",
+        }
+        quoted_string_predicates = {NAMESPACE_SHACL + "pattern", NAMESPACE_SHACL + "flags"}
+
+        if predicate in literal_predicates:
+            return ShapeParser.sparql_literal(value)
+        if predicate in quoted_string_predicates:
+            return json.dumps(str(value))
+        return str(value)
+
+    @staticmethod
     def abbreviated_syntax_used(constraints):
         """
         Run after parsingConstraints.
@@ -529,9 +586,16 @@ class ShapeParser:
                 constraint_id = constraint[0]
 
                 for detail in filename.query(query[4].format(constraint=constraint_id)):
-                    if isinstance(detail.asdict()["o"], rdflib.term.BNode):
-                        qv_type = detail.asdict()["p"]
-                        qvs = detail.asdict()["o"]
+                    detail_dict = detail.asdict()
+                    predicate = str(detail_dict["p"])
+                    obj = detail_dict["o"]
+
+                    if isinstance(obj, rdflib.term.BNode) and predicate == NAMESPACE_SHACL + "languageIn":
+                        languages = [json.dumps(str(item)) for item in filename.items(obj)]
+                        exp_dict[str(constraint_id)].append([predicate, languages])
+                    elif isinstance(obj, rdflib.term.BNode):
+                        qv_type = detail_dict["p"]
+                        qvs = obj
                         if len(filename.query(query[5].format(qvs=qvs))) != 0:
                             dict_1 = None
                             for shape_ref in filename.query(query[5].format(qvs=qvs)):
@@ -560,7 +624,7 @@ class ShapeParser:
                                     )
                     else:
                         # detail_dict = detail.asdict()
-                        dict_2 = [str(detail["p"]), str(detail["o"])]
+                        dict_2 = [predicate, self.constraint_value(predicate, obj)]
                         exp_dict[str(constraint_id)].append(dict_2.copy())
 
         if filename.query(query[8].format(shape=name)):
@@ -569,7 +633,11 @@ class ShapeParser:
                 dict_or = collections.defaultdict(list)
                 for item in constraint_id:
                     for detail in filename.query(query[4].format(constraint=item.toPython())):
-                        dict_3 = [str(detail["p"]), str(detail["o"])]
+                        detail_dict = detail.asdict()
+                        dict_3 = [
+                            str(detail_dict["p"]),
+                            self.constraint_value(str(detail_dict["p"]), detail_dict["o"]),
+                        ]
                         dict_or[str(item)].append(dict_3.copy())
                 exp_dict[str(constraint_id)].append(dict_or.copy())
 
@@ -608,13 +676,29 @@ class ShapeParser:
                     trav_dict["shape"] = None
                     trav_dict["datatype"] = None
                     trav_dict["negated"] = None
+                    trav_dict["class"] = None
+                    trav_dict["nodeKind"] = None
+                    trav_dict["minInclusive"] = None
+                    trav_dict["minExclusive"] = None
+                    trav_dict["maxInclusive"] = None
+                    trav_dict["maxExclusive"] = None
+                    trav_dict["minLength"] = None
+                    trav_dict["maxLength"] = None
+                    trav_dict["pattern"] = None
+                    trav_dict["flags"] = None
+                    trav_dict["languageIn"] = None
+                    trav_dict["uniqueLang"] = None
+                    trav_dict["equals"] = None
+                    trav_dict["disjoint"] = None
+                    trav_dict["lessThan"] = None
+                    trav_dict["lessThanOrEquals"] = None
                     trav_dict["or"] = {}
                     trav_dict["flag"] = False
                     trav_dict["sparql"] = None
 
                     if "Graph.items" not in dk:
                         for i in dv:
-                            self.dispatch_constraint_entry(trav_dict, str(i[0]), str(i[1]))
+                            self.dispatch_constraint_entry(trav_dict, str(i[0]), i[1])
 
                     else:
                         trav_dict["flag"] = True
@@ -622,12 +706,16 @@ class ShapeParser:
                             for i_or, j_or in options.items():
                                 trav_dict["or"][i_or] = {}
                                 for j_sub in j_or:
-                                    self.dispatch_constraint_entry(trav_dict["or"][i_or], str(j_sub[0]), str(j_sub[1]))
+                                    self.dispatch_constraint_entry(trav_dict["or"][i_or], str(j_sub[0]), j_sub[1])
 
                 exp_dict[str(dk)] = trav_dict.copy()
         return exp_dict
 
     def dispatch_constraint_entry(self, trav_dict, predicate, value):
+        if predicate == NAMESPACE_SHACL + "flags":
+            trav_dict["flags"] = value
+            return
+
         key = CONSTRAINT_DISPATCH.get(predicate)
         if key is not None:
             trav_dict[key] = value
@@ -764,10 +852,12 @@ class ShapeParser:
         if datatype is not None:  # if the data type is a url, add '<>' to it
             o_datatype = self.sparql_term(datatype)
 
+        constraints = []
+
         if o_path is not None:
             if o_min is not None:
                 if o_max is not None:
-                    return self.apply_constraint_metadata(
+                    constraints.extend(
                         [
                             MinOnlyConstraint(
                                 var_generator,
@@ -793,11 +883,10 @@ class ShapeParser:
                                 o_shape_ref,
                                 target_def,
                             ),
-                        ],
-                        obj,
+                        ]
                     )
-                return self.apply_constraint_metadata(
-                    [
+                else:
+                    constraints.append(
                         MinOnlyConstraint(
                             var_generator,
                             id_,
@@ -810,27 +899,112 @@ class ShapeParser:
                             o_shape_ref,
                             target_def,
                         )
-                    ],
-                    obj,
-                )
+                    )
             if o_max is not None:
-                return self.apply_constraint_metadata(
-                    [
-                        MaxOnlyConstraint(
-                            var_generator,
-                            id_,
-                            o_path,
-                            o_max,
-                            o_neg,
-                            options,
-                            o_datatype,
-                            o_value,
-                            o_shape_ref,
-                            target_def,
-                        )
-                    ],
-                    obj,
+                constraints.append(
+                    MaxOnlyConstraint(
+                        var_generator,
+                        id_,
+                        o_path,
+                        o_max,
+                        o_neg,
+                        options,
+                        o_datatype,
+                        o_value,
+                        o_shape_ref,
+                        target_def,
+                    )
                 )
+
+            if obj.get("class") is not None:
+                constraints.append(
+                    ClassConstraint(
+                        var_generator, id_, o_path, self.sparql_term(obj.get("class")), o_neg, options, target_def
+                    )
+                )
+            if obj.get("nodeKind") is not None:
+                constraints.append(
+                    NodeKindConstraint(
+                        var_generator, id_, o_path, self.sparql_term(obj.get("nodeKind")), o_neg, options, target_def
+                    )
+                )
+            if obj.get("minInclusive") is not None:
+                constraints.append(
+                    RangeMinInclusiveConstraint(
+                        var_generator, id_, o_path, obj.get("minInclusive"), o_neg, options, target_def
+                    )
+                )
+            if obj.get("minExclusive") is not None:
+                constraints.append(
+                    RangeMinExclusiveConstraint(
+                        var_generator, id_, o_path, obj.get("minExclusive"), o_neg, options, target_def
+                    )
+                )
+            if obj.get("maxInclusive") is not None:
+                constraints.append(
+                    RangeMaxInclusiveConstraint(
+                        var_generator, id_, o_path, obj.get("maxInclusive"), o_neg, options, target_def
+                    )
+                )
+            if obj.get("maxExclusive") is not None:
+                constraints.append(
+                    RangeMaxExclusiveConstraint(
+                        var_generator, id_, o_path, obj.get("maxExclusive"), o_neg, options, target_def
+                    )
+                )
+            if obj.get("minLength") is not None:
+                constraints.append(
+                    MinLengthConstraint(var_generator, id_, o_path, obj.get("minLength"), o_neg, options, target_def)
+                )
+            if obj.get("maxLength") is not None:
+                constraints.append(
+                    MaxLengthConstraint(var_generator, id_, o_path, obj.get("maxLength"), o_neg, options, target_def)
+                )
+            if obj.get("pattern") is not None:
+                constraints.append(
+                    PatternConstraint(
+                        var_generator, id_, o_path, obj.get("pattern"), o_neg, options, obj.get("flags"), target_def
+                    )
+                )
+            if obj.get("languageIn") is not None:
+                constraints.append(
+                    LanguageInConstraint(var_generator, id_, o_path, obj.get("languageIn"), o_neg, options, target_def)
+                )
+            if self.parse_bool(obj.get("uniqueLang", False)):
+                constraints.append(UniqueLangConstraint(var_generator, id_, o_path, o_neg, options, target_def))
+            if obj.get("equals") is not None:
+                constraints.append(
+                    PairEqualsConstraint(
+                        var_generator, id_, o_path, self.sparql_term(obj.get("equals")), o_neg, options, target_def
+                    )
+                )
+            if obj.get("disjoint") is not None:
+                constraints.append(
+                    PairDisjointConstraint(
+                        var_generator, id_, o_path, self.sparql_term(obj.get("disjoint")), o_neg, options, target_def
+                    )
+                )
+            if obj.get("lessThan") is not None:
+                constraints.append(
+                    PairLessThanConstraint(
+                        var_generator, id_, o_path, self.sparql_term(obj.get("lessThan")), o_neg, options, target_def
+                    )
+                )
+            if obj.get("lessThanOrEquals") is not None:
+                constraints.append(
+                    PairLessThanOrEqualsConstraint(
+                        var_generator,
+                        id_,
+                        o_path,
+                        self.sparql_term(obj.get("lessThanOrEquals")),
+                        o_neg,
+                        options,
+                        target_def,
+                    )
+                )
+
+            if constraints:
+                return self.apply_constraint_metadata(constraints, obj)
         elif o_query is not None:
             return self.apply_constraint_metadata([SPARQLConstraint(id_, o_neg, o_query)], obj)
         elif options is not None:

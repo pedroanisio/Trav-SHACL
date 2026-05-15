@@ -17,6 +17,7 @@ class Constraint:
         target_def=None,
         path=None,
         options=None,
+        referenced_property=None,
     ):
         """
         Base constructor for all constraints.
@@ -30,6 +31,7 @@ class Constraint:
         :param target_def: contains the target definition of the shape the constraint belongs to if it has one
         :param path: the path associated with this constraint, e.g., a predicate
         :param options: gets the options to be used in or_operation
+        :param referenced_property: a second SHACL property path used by pair constraints
         """
         self.id = id_
         self.isPos = is_pos
@@ -44,6 +46,9 @@ class Constraint:
 
         self.variables = []
         self.path = None if path is None else PathExpression.from_string(path)
+        self.referencedProperty = (
+            None if referenced_property is None else PathExpression.from_string(referenced_property)
+        )
         self.severity = None
         self.name = None
         self.description = None
@@ -89,6 +94,9 @@ class Constraint:
 
     def path_sparql(self):
         return None if self.path is None else self.path.to_sparql()
+
+    def referenced_property_sparql(self):
+        return None if self.referencedProperty is None else self.referencedProperty.to_sparql()
 
     def is_sparql_constraint(self):
         return False
