@@ -41,7 +41,7 @@ Trav-SHACL can also be installed from its source code in GitHub without explicit
 
 .. code:: bash
 
-   python -m pip install -e 'git+https://github.com/SDM-TIB/Trav-SHACL#egg=DeTrusty'
+   python -m pip install -e 'git+https://github.com/SDM-TIB/Trav-SHACL#egg=TravSHACL'
 
 PyPI
 ====
@@ -176,6 +176,7 @@ Parameters
 Before executing the above script, let us have a look at the different parameters.
 
 * ``schema_dir`` path to the directory containing the shape files (or an RDFlib graph)
+* ``schema_format`` (optional) shape-definition format, one of ``[SHACL, JSON]``; the JSON format is deprecated; default: ``SHACL``
 * ``endpoint`` URL of the endpoint to evaluated; alternatively, an RDFLib graph can be passed
 * ``endpoint_user`` (optional) username if validating a private endpoint; default: ``None``
 * ``endpoint_password`` (optional) password if validating a private endpoint; default: ``None``
@@ -190,6 +191,7 @@ Before executing the above script, let us have a look at the different parameter
 * ``output_dir`` (optional) directory where the output files will be stored; default: ``None``
 * ``order_by_in_queries`` (optional) sort the results of all SPARQL queries, ensures the same order in the result logs over several runs, is one of ``[True, False]``; default: ``False``
 * ``save_outputs`` (optional) creates one file each for violated and validated targets, otherwise only statistics and traces will be stored, is one of ``[True, False]``; default: ``False``
+* ``work_in_parallel`` (optional) reserved flag for future parallelization support; not yet implemented; default: ``False``
 * ``ignore_parsing_errors`` (optional) whether to ignore parsing errors, i.e., logging a warning instead of throwing an exception; default: ``False``
 
 Results: Internal Structure

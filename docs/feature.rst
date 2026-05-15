@@ -6,6 +6,7 @@ The current implementation of Trav-SHACL does not cover all features of the comp
 The following is a list of what is supported:
 
 *   simple cardinality constraints, i.e., ``sh:minCount`` and ``sh:maxCount``
+*   datatype constraints, i.e., ``sh:datatype``
 *   relaxed shape-based constraints, i.e., ``sh:qualifiedValueShape`` with ``sh:qualifiedMinCount`` and ``sh:qualifiedMaxCount``
 *   simple SPARQL constraints, i.e., ``sh:sparql`` with ``sh:select``
 
@@ -13,6 +14,7 @@ The following is a list of what is supported:
         +   ``sh:message`` is ignored, i.e., the message is not included in the result
         +   only ``$this`` is supported as placeholder
 *   simple logical constraints, i.e., ``sh:or``
+*   inverse paths, i.e., ``sh:path [ sh:inversePath ex:your_predicate ]``
 *   Trav-SHACL is capable of validating
 
         +   public SPARQL endpoints
@@ -22,7 +24,6 @@ The following is a list of what is supported:
 The following is a list of some of the more important features that are not yet covered:
 
 *   ``sh:node``
-*   ``sh:datatype``
 *   ``sh:hasValue``
 *   ``sh:and``
 *   ``sh:not``
