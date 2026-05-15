@@ -20,3 +20,4 @@ output/
 example/result/
 example/data/virtuoso/
 .repo/
+.agent-tasks

@@ -124,7 +124,7 @@ class ShapeSchema:
                 possible_starting_points = tmp
 
         if not possible_starting_points:
-            possible_starting_points = all
+            raise ValueError('Cannot determine a starting shape: no parsed shape has a target definition.')
         return [s.get_id() for s in possible_starting_points]
 
     @staticmethod

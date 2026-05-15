@@ -31,6 +31,12 @@ class Constraint:
 
         self.variables = []
         self.path = path
+        self.severity = None
+        self.name = None
+        self.description = None
+        self.group = None
+        self.order = None
+        self.defaultValue = None
 
     def get_datatype(self):
         return self.datatype
@@ -40,6 +46,24 @@ class Constraint:
 
     def get_shape_ref(self):
         return self.shapeRef
+
+    def get_severity(self):
+        return self.severity
+
+    def get_name(self):
+        return self.name
+
+    def get_description(self):
+        return self.description
+
+    def get_group(self):
+        return self.group
+
+    def get_order(self):
+        return self.order
+
+    def get_default_value(self):
+        return self.defaultValue
 
     def get_id(self):
         return self.id

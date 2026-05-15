@@ -1,0 +1,28 @@
+{
+  "name": "ClassA",
+  "displayName": "Class A shape",
+  "description": "Requires at least one property0 value.",
+  "severity": "http://www.w3.org/ns/shacl#Warning",
+  "targetDef": {
+    "query": "SELECT ?x WHERE { ?x a test:ClassA }",
+    "class": "test:ClassA"
+  },
+  "prefix": {
+    "test": "<http://test.example.com/>"
+  },
+  "constraintDef": {
+    "conjunctions": [
+      [
+        {
+          "path": "test:property0",
+          "min": 1,
+          "severity": "http://www.w3.org/ns/shacl#Warning",
+          "name": "property0 minimum",
+          "description": "A property0 value is expected.",
+          "order": 1,
+          "defaultValue": "fallback"
+        }
+      ]
+    ]
+  }
+}

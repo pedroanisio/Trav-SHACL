@@ -14,7 +14,8 @@ class Shape:
 
     def __init__(self, id_, target_def, target_type, target_query, constraints, constraints_id, referenced_shapes,
                  use_selective_queries, max_split_size, order_by_in_queries, include_sparql_prefixes, flag,
-                 prefixes=None):
+                 prefixes=None, shape_kind='NodeShape', deactivated=False, severity=None, name=None, description=None,
+                 group=None, order=None, default_value=None):
         """
         Creates a new Shape instance representing a SHACL shape that needs to be evaluated.
 
@@ -44,6 +45,14 @@ class Shape:
         self.inDegree = None
         self.outDegree = None
         self.flag = flag
+        self.shapeKind = shape_kind
+        self.deactivated = deactivated
+        self.severity = severity
+        self.name = name
+        self.description = description
+        self.group = group
+        self.order = order
+        self.defaultValue = default_value
 
         self.minQuery = None
         self.maxQueries = None
@@ -72,6 +81,30 @@ class Shape:
     def get_id(self):
         return self.id
 
+    def get_shape_kind(self):
+        return self.shapeKind
+
+    def is_deactivated(self):
+        return self.deactivated
+
+    def get_severity(self):
+        return self.severity
+
+    def get_name(self):
+        return self.name
+
+    def get_description(self):
+        return self.description
+
+    def get_group(self):
+        return self.group
+
+    def get_order(self):
+        return self.order
+
+    def get_default_value(self):
+        return self.defaultValue
+
     def set_degree(self, in_, out_):
         self.inDegree = in_
         self.outDegree = out_
@@ -82,6 +115,12 @@ class Shape:
 
     def get_target_query(self):
         return self.targetQuery
+
+    def get_target_def(self):
+        return self.targetDef
+
+    def get_target_type(self):
+        return self.targetType
 
     def get_constraints(self):
         return self.constraints

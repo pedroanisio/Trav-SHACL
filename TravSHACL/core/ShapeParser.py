@@ -17,9 +17,43 @@ from TravSHACL.utils.VariableGenerator import VariableGenerator
 from TravSHACL.constraints.MaxOnlyConstraint import MaxOnlyConstraint
 from TravSHACL.constraints.MinOnlyConstraint import MinOnlyConstraint
 
+NAMESPACE_SHACL = 'http://www.w3.org/ns/shacl#'
+NAMESPACE_RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'
+
+SH_NODE_SHAPE = NAMESPACE_SHACL + 'NodeShape'
+SH_PROPERTY_SHAPE = NAMESPACE_SHACL + 'PropertyShape'
+
+CONSTRAINT_DISPATCH = {
+    NAMESPACE_SHACL + 'path': 'path',
+    NAMESPACE_SHACL + 'minCount': 'min',
+    NAMESPACE_SHACL + 'maxCount': 'max',
+    NAMESPACE_SHACL + 'qualifiedMinCount': 'min',
+    NAMESPACE_SHACL + 'qualifiedMaxCount': 'max',
+    NAMESPACE_SHACL + 'datatype': 'datatype',
+    NAMESPACE_SHACL + 'qualifiedValueShape': 'shape',
+    NAMESPACE_SHACL + 'node': 'shape',
+    NAMESPACE_SHACL + 'value': 'value',
+    NAMESPACE_SHACL + 'not': 'negated',
+}
+
+METADATA_DISPATCH = {
+    NAMESPACE_SHACL + 'severity': 'severity',
+    NAMESPACE_SHACL + 'name': 'name',
+    NAMESPACE_SHACL + 'description': 'description',
+    NAMESPACE_SHACL + 'group': 'group',
+    NAMESPACE_SHACL + 'order': 'order',
+    NAMESPACE_SHACL + 'defaultValue': 'defaultValue',
+}
+
+IGNORED_CONSTRAINT_IRIS = {
+    NAMESPACE_RDF + 'type',
+    NAMESPACE_SHACL + 'targetClass',
+    NAMESPACE_SHACL + 'targetNode',
+    NAMESPACE_SHACL + 'targetQuery',
+}
+
 QUERY_TARGET_QUERY = '''SELECT ?query WHERE {{
-  <{shape}> a <http://www.w3.org/ns/shacl#NodeShape> ;
-      <http://www.w3.org/ns/shacl#targetQuery> ?query .
+  <{shape}> <http://www.w3.org/ns/shacl#targetQuery> ?query .
 }}'''
 
 log = logging.getLogger(__name__)
@@ -103,6 +137,8 @@ class ShapeParser:
         obj = json.load(file)
         target_def = obj.get('targetDef')
         name = obj['name']
+        shape_kind = obj.get('shapeKind', 'NodeShape')
+        shape_metadata = self.parse_json_metadata(obj)
         id_ = name + '_d1'  # str(i + 1) but there is only one set of conjunctions
         constraints = self.parse_constraints(obj['constraintDef']['conjunctions'], target_def, id_)
 
@@ -127,7 +163,7 @@ class ShapeParser:
 
         return Shape(name, target_def, target_type, target_query, constraints, id_, referenced_shapes,
                      use_selective_queries, max_split_size, order_by_in_queries, include_sparql_prefixes,
-                     valid_flag, prefixes)
+                     valid_flag, prefixes, shape_kind=shape_kind, **shape_metadata)
 
     def parse_ttl(self, shapes_graph: Graph, use_selective_queries, max_split_size, order_by_in_queries):
         """
@@ -142,10 +178,11 @@ class ShapeParser:
         queries = self.get_QUERY()
         shapes = []
 
-        names = [str(row[0]) for row in shapes_graph.query(queries[0])]
+        shape_entries = [(str(row[0]), str(row[1])) for row in shapes_graph.query(queries[0])]
 
-        for name in names:
+        for name, shape_kind in shape_entries:
             id_ = name + '_d1'  # str(i + 1) but there is only one set of conjunctions
+            shape_metadata = self.parse_shape_metadata(shapes_graph, name, queries[9])
 
             # to get the target_ref and target_type
             target_def = None
@@ -198,9 +235,51 @@ class ShapeParser:
 
             shapes.append(Shape(name_, target_def, target_type, target_query, constraints, id_, referenced_shape,
                                 use_selective_queries, max_split_size, order_by_in_queries, include_sparql_prefixes,
-                                valid_flag, prefixes))
+                                valid_flag, prefixes, shape_kind=shape_kind, **shape_metadata))
 
         return shapes
+
+    @staticmethod
+    def parse_json_metadata(obj):
+        return {
+            'deactivated': ShapeParser.parse_bool(obj.get('deactivated', False)),
+            'severity': obj.get('severity'),
+            'name': obj.get('displayName') or obj.get('label'),
+            'description': obj.get('description'),
+            'group': obj.get('group'),
+            'order': obj.get('order'),
+            'default_value': obj.get('defaultValue')
+        }
+
+    @staticmethod
+    def parse_bool(value):
+        if isinstance(value, bool):
+            return value
+        return str(value).lower() in {'true', '1'}
+
+    @staticmethod
+    def parse_shape_metadata(shapes_graph, shape, query):
+        metadata = {
+            'deactivated': False,
+            'severity': None,
+            'name': None,
+            'description': None,
+            'group': None,
+            'order': None,
+            'default_value': None
+        }
+        for result in shapes_graph.query(query.format(shape=shape)):
+            predicate = str(result['p'])
+            value = str(result['o'])
+            if predicate == NAMESPACE_SHACL + 'deactivated':
+                metadata['deactivated'] = ShapeParser.parse_bool(value)
+            elif predicate == NAMESPACE_SHACL + 'defaultValue':
+                metadata['default_value'] = value
+            else:
+                key = METADATA_DISPATCH.get(predicate)
+                if key is not None:
+                    metadata[key] = value
+        return metadata
 
     @staticmethod
     def abbreviated_syntax_used(constraints):
@@ -240,25 +319,34 @@ class ShapeParser:
 
     @staticmethod
     def get_QUERY():
-        QUERY_SHAPES = '''SELECT DISTINCT ?shape WHERE {
-            ?shape a <http://www.w3.org/ns/shacl#NodeShape> .
-            }'''
+        QUERY_SHAPES = '''SELECT DISTINCT ?shape ?shape_kind WHERE {
+            {
+                ?shape a <http://www.w3.org/ns/shacl#NodeShape> .
+                BIND("NodeShape" AS ?shape_kind)
+            } UNION {
+                ?shape a <http://www.w3.org/ns/shacl#PropertyShape> .
+                BIND("PropertyShape" AS ?shape_kind)
+            }
+            } ORDER BY ?shape'''
 
         QUERY_TARGET_1 = '''SELECT ?target WHERE {{
-            <{shape}> a <http://www.w3.org/ns/shacl#NodeShape> .
             <{shape}> <http://www.w3.org/ns/shacl#targetClass> ?target .
-        }}
-        '''
-
-        QUERY_TARGET_2 = '''SELECT ?target WHERE {{
-                    <{shape}> a <http://www.w3.org/ns/shacl#NodeShape> .
-                    <{shape}> <http://www.w3.org/ns/shacl#targetNode> ?target .
-                }}
+            }}
                 '''
 
+        QUERY_TARGET_2 = '''SELECT ?target WHERE {{
+                    <{shape}> <http://www.w3.org/ns/shacl#targetNode> ?target .
+                    }}
+                        '''
+
         QUERY_CONSTRAINTS = '''SELECT ?constraint WHERE {{
-          <{shape}> a <http://www.w3.org/ns/shacl#NodeShape> .
-          <{shape}> <http://www.w3.org/ns/shacl#property> ?constraint .
+          {{
+              <{shape}> a <http://www.w3.org/ns/shacl#NodeShape> .
+              <{shape}> <http://www.w3.org/ns/shacl#property> ?constraint .
+          }} UNION {{
+              <{shape}> a <http://www.w3.org/ns/shacl#PropertyShape> .
+              BIND(<{shape}> AS ?constraint)
+          }}
         }}
         '''
 
@@ -305,8 +393,20 @@ class ShapeParser:
                                   <{shape}> <http://www.w3.org/ns/shacl#or> ?constraint .
                                 }}
                                 '''
+        QUERY_SHAPE_METADATA = '''SELECT ?p ?o WHERE {{
+            <{shape}> ?p ?o .
+            FILTER(?p IN (
+                <http://www.w3.org/ns/shacl#deactivated>,
+                <http://www.w3.org/ns/shacl#severity>,
+                <http://www.w3.org/ns/shacl#name>,
+                <http://www.w3.org/ns/shacl#description>,
+                <http://www.w3.org/ns/shacl#group>,
+                <http://www.w3.org/ns/shacl#order>,
+                <http://www.w3.org/ns/shacl#defaultValue>
+            ))
+        }}'''
         return QUERY_SHAPES, QUERY_TARGET_1, QUERY_TARGET_2, QUERY_CONSTRAINTS, QUERY_CONSTRAINT_DETAILS, \
-               QUERY_QVS_REF_1, QUERY_QVS_REF_2, QUERY_SPARQL_CONSTRAINTS, QUERY_OR
+               QUERY_QVS_REF_1, QUERY_QVS_REF_2, QUERY_SPARQL_CONSTRAINTS, QUERY_OR, QUERY_SHAPE_METADATA
 
     def get_res(self, filename, name, query):
         """
@@ -405,27 +505,7 @@ class ShapeParser:
 
                     if "Graph.items" not in dk:
                         for i in dv:
-                            if 'path' in str(i[0]).lower():
-                                trav_dict['path'] = str(i[1])
-
-                            if 'min' in str(i[0]).lower():
-                                trav_dict['min'] = str(i[1])
-
-                            if 'max' in str(i[0]).lower():
-                                trav_dict['max'] = str(i[1])
-
-                            if 'datatype' in str(i[0]).lower():
-                                trav_dict['datatype'] = str(i[1])
-
-                            if 'valueshape' in str(i[0]).lower():
-                                trav_dict['shape'] = str(i[1])
-                            #                            if 'value' in str(i[1][0]).lower():
-                            #                                trav_dict['value'] = str(i[1][1])
-                            #                            if 'shape' in str(i[1][0]).lower():
-                            #                                trav_dict['shape'] = str(i[1][1])
-
-                            if 'not' in str(i[0]).lower():
-                                trav_dict['negated'] = str(i[1])
+                            self.dispatch_constraint_entry(trav_dict, str(i[0]), str(i[1]))
 
                     else:
                         trav_dict['flag'] = True
@@ -433,16 +513,40 @@ class ShapeParser:
                             for i_or, j_or in options.items():
                                 trav_dict['or'][i_or] = {}
                                 for j_sub in j_or:
-                                    if 'path' in str(j_sub[0]).lower():
-                                        trav_dict['or'][i_or]['path'] = str(j_sub[1])
-                                    if 'max' in str(j_sub[0]).lower():
-                                        trav_dict['or'][i_or]['max'] = str(j_sub[1])
-                                        # trav_dict['max'] = str(sub_option[1])
-                                    if 'min' in str(j_sub[0]).lower():
-                                        trav_dict['or'][i_or]['min'] = str(j_sub[1])
+                                    self.dispatch_constraint_entry(trav_dict['or'][i_or], str(j_sub[0]), str(j_sub[1]))
 
                 exp_dict[str(dk)] = trav_dict.copy()
         return exp_dict
+
+    def dispatch_constraint_entry(self, trav_dict, predicate, value):
+        key = CONSTRAINT_DISPATCH.get(predicate)
+        if key is not None:
+            trav_dict[key] = value
+            return
+
+        metadata_key = METADATA_DISPATCH.get(predicate)
+        if metadata_key is not None:
+            trav_dict[metadata_key] = value
+            return
+
+        if predicate in IGNORED_CONSTRAINT_IRIS:
+            return
+
+        if self.ignore_errors:
+            log.warning('Unsupported SHACL constraint IRI %s; skipping it...', predicate)
+        else:
+            raise NotImplementedError('Unsupported SHACL constraint IRI: ' + predicate)
+
+    @staticmethod
+    def apply_constraint_metadata(constraints, obj):
+        for constraint in constraints:
+            constraint.severity = obj.get('severity')
+            constraint.name = obj.get('name')
+            constraint.description = obj.get('description')
+            constraint.group = obj.get('group')
+            constraint.order = obj.get('order')
+            constraint.defaultValue = obj.get('defaultValue')
+        return constraints
 
     def parse_constraints(self, array, target_def, constraints_id):
         """
@@ -537,15 +641,23 @@ class ShapeParser:
         if o_path is not None:
             if o_min is not None:
                 if o_max is not None:
-                    return [MinOnlyConstraint(var_generator, id_, o_path, o_min, o_neg, options, o_datatype, o_value, o_shape_ref, target_def),
-                            MaxOnlyConstraint(var_generator, id_, o_path, o_max, o_neg, options, o_datatype, o_value, o_shape_ref, target_def)]
-                return [MinOnlyConstraint(var_generator, id_, o_path, o_min, o_neg, options, o_datatype, o_value, o_shape_ref, target_def)]
+                    return self.apply_constraint_metadata([
+                        MinOnlyConstraint(var_generator, id_, o_path, o_min, o_neg, options, o_datatype, o_value, o_shape_ref, target_def),
+                        MaxOnlyConstraint(var_generator, id_, o_path, o_max, o_neg, options, o_datatype, o_value, o_shape_ref, target_def)
+                    ], obj)
+                return self.apply_constraint_metadata([
+                    MinOnlyConstraint(var_generator, id_, o_path, o_min, o_neg, options, o_datatype, o_value, o_shape_ref, target_def)
+                ], obj)
             if o_max is not None:
-                return [MaxOnlyConstraint(var_generator, id_, o_path, o_max, o_neg, options, o_datatype, o_value, o_shape_ref, target_def)]
+                return self.apply_constraint_metadata([
+                    MaxOnlyConstraint(var_generator, id_, o_path, o_max, o_neg, options, o_datatype, o_value, o_shape_ref, target_def)
+                ], obj)
         elif o_query is not None:
-            return [SPARQLConstraint(id_, o_neg, o_query)]
+            return self.apply_constraint_metadata([SPARQLConstraint(id_, o_neg, o_query)], obj)
         elif options is not None:
-            return [MinOnlyConstraint(var_generator, id_, o_path, o_min, o_neg, options, o_datatype, o_value, o_shape_ref, target_def)]
+            return self.apply_constraint_metadata([
+                MinOnlyConstraint(var_generator, id_, o_path, o_min, o_neg, options, o_datatype, o_value, o_shape_ref, target_def)
+            ], obj)
 
         if self.ignore_errors:
             log.warning('There was an unsupported constraint, skipping it...')

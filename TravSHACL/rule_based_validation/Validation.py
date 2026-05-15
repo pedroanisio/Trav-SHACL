@@ -71,6 +71,25 @@ class Validation:
             self.valid_targets_after_termination.update(state.remaining_targets)
             return
 
+        if focus_shape.is_deactivated():
+            self.stats.update_log('\n\n>>>>> Skipping deactivated shape: ' + focus_shape.get_id())
+            state.evaluated_predicates.add(focus_shape.get_id())
+            state.visited_shapes.add(focus_shape)
+            state.remaining_targets = {
+                target for target in state.remaining_targets
+                if target[0] != focus_shape.get_id()
+            }
+            state.shapes_state[focus_shape.get_id()]['remaining_targets_count'] = 0
+
+            next_focus_shape = None
+            if len(self.node_order) > 0:
+                next_focus_shape = self.shapes_dict[self.node_order.pop(0)]
+                pending_targets = self.retrieve_next_targets(state, next_focus_shape, state.shapes_state)
+                state.remaining_targets.update(pending_targets)
+
+            self.validate(state, next_focus_shape)
+            return
+
         self.stats.update_log('\n\n>>>>> Starting validation of shape: ' + focus_shape.get_id())
         state.evaluated_predicates.add(focus_shape.get_id())
         self.eval_shape(state, focus_shape, state.shapes_state)

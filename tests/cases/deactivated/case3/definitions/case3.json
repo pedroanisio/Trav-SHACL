@@ -1,0 +1,7 @@
+{
+  "schemaDir": "./tests/cases/deactivated/case3/shapes/",
+  "groundTruth": {
+    "valid": [],
+    "invalid": []
+  }
+}
