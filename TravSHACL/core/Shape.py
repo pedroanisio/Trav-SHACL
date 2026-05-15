@@ -131,7 +131,7 @@ class Shape:
 
     def get_sparql_constraints(self):
         """ Get all SPARQL constraints of the shape """
-        return [c for c in self.constraints if type(c) == SPARQLConstraint]
+        return [c for c in self.constraints if isinstance(c, SPARQLConstraint)]
 
     def get_shape_refs(self):
         return [c.get_shape_ref() for c in self.constraints if c.get_shape_ref() is not None]
