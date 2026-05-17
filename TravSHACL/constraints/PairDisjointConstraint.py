@@ -7,6 +7,8 @@ from TravSHACL.utils.VariableGenerator import VariableType
 class PairDisjointConstraint(Constraint):
     """Represents sh:disjoint constraints."""
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#DisjointConstraintComponent"
+
     def __init__(self, var_generator, id_, path, referenced_property, is_pos, options, target_def=None):
         super().__init__(
             id_, is_pos, None, None, referenced_property, None, target_def, path, options, referenced_property

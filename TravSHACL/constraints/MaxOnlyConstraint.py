@@ -7,6 +7,8 @@ from TravSHACL.utils.VariableGenerator import VariableType
 class MaxOnlyConstraint(Constraint):
     """This class represents max constraints, i.e., a constraint for the maximal occurrence of a path."""
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#MaxCountConstraintComponent"
+
     def __init__(
         self,
         var_generator,

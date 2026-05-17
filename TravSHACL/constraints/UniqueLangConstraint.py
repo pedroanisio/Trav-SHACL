@@ -7,6 +7,8 @@ from TravSHACL.utils.VariableGenerator import VariableType
 class UniqueLangConstraint(Constraint):
     """Represents sh:uniqueLang constraints."""
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#UniqueLangConstraintComponent"
+
     def __init__(self, var_generator, id_, path, is_pos, options, target_def=None):
         super().__init__(id_, is_pos, None, None, "true", None, target_def, path, options)
         self.varGenerator = var_generator

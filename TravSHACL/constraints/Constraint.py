@@ -4,7 +4,21 @@ from TravSHACL.core.Path import PathExpression
 
 
 class Constraint:
-    """Base class for all constraints."""
+    """Base class for all constraints.
+
+    Subclasses MUST override SOURCE_COMPONENT with the SHACL §4 constraint
+    component IRI (e.g., ``http://www.w3.org/ns/shacl#MinCountConstraintComponent``).
+    The ValidationReportSerializer reads ``get_source_component()`` to emit
+    ``sh:sourceConstraintComponent`` per the SHACL spec. Subclasses whose
+    component IRI depends on instance state (``MinMaxConstraint``,
+    ``QualifiedValueShapeConstraint``) override ``get_source_component()``
+    instead of (or in addition to) the class attribute.
+
+    Enforced by ``tests/test_drift_guards.py::test_every_constraint_has_source_component``:
+    every concrete subclass must declare a non-None SOURCE_COMPONENT.
+    """
+
+    SOURCE_COMPONENT: str | None = None
 
     def __init__(
         self,
@@ -82,6 +96,18 @@ class Constraint:
 
     def get_default_value(self):
         return self.defaultValue
+
+    def get_source_component(self):
+        """Return the SHACL §4 constraint component IRI for this constraint instance.
+
+        Default returns ``self.SOURCE_COMPONENT`` (the class attribute).
+        Subclasses whose component IRI depends on instance state override
+        this method (e.g., ``MinMaxConstraint`` returns Min or Max component
+        based on which bound is set; ``QualifiedValueShapeConstraint``
+        returns QualifiedMin or QualifiedMax based on ``qualifiedMin`` vs
+        ``qualifiedMax`` field state).
+        """
+        return self.SOURCE_COMPONENT
 
     def get_id(self):
         return self.id

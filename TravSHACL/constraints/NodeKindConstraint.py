@@ -18,6 +18,8 @@ NODE_KIND_FILTERS = {
 class NodeKindConstraint(Constraint):
     """Represents sh:nodeKind constraints."""
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#NodeKindConstraintComponent"
+
     def __init__(self, var_generator, id_, path, node_kind, is_pos, options, target_def=None):
         if node_kind.strip("<>") not in NODE_KIND_FILTERS:
             raise ValueError("Unsupported sh:nodeKind value: " + node_kind)

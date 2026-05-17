@@ -25,6 +25,8 @@ class NotConstraint(Constraint):
     is needed — the polarity comes from max=0 alone.
     """
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#NotConstraintComponent"
+
     def __init__(self, var_generator, id_, nested_constraints, is_pos, options, target_def=None):
         super().__init__(id_, is_pos, None, None, None, None, target_def, None, options)
         self.varGenerator = var_generator

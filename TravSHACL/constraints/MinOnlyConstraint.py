@@ -7,6 +7,8 @@ from TravSHACL.utils.VariableGenerator import VariableType
 class MinOnlyConstraint(Constraint):
     """This class represents min constraints, i.e., a constraint for the minimal occurrence of a path."""
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#MinCountConstraintComponent"
+
     def __init__(
         self,
         var_generator,

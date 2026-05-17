@@ -6,6 +6,8 @@ from TravSHACL.constraints.Constraint import Constraint
 class SPARQLConstraint(Constraint):
     """This class represents max constraints, i.e., a constraint for the maximal occurrence of a path."""
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#SPARQLConstraintComponent"
+
     def __init__(self, id_, is_pos, query: str | None = None):
         """
         Creates a new SPARQL constraint.

@@ -363,3 +363,43 @@ def test_example_docs_match_compose_topology():
     assert f"http://localhost:{data_external_port}/sparql" in service_doc
     assert f"http://localhost:{data_external_port}/sparql" in example_readme
     assert f"http://localhost:{engine_external_port}/validate" in service_doc
+
+
+def test_every_constraint_has_source_component():
+    """Every concrete Constraint subclass declares a SHACL §4 component IRI.
+
+    Forcing function for the polymorphic-dispatch pattern: any new subclass
+    must record its sh:sourceConstraintComponent IRI via the SOURCE_COMPONENT
+    class attribute (or override get_source_component() for dual-mode cases
+    like MinMaxConstraint and QualifiedValueShapeConstraint).
+
+    The Constraint base intentionally has SOURCE_COMPONENT = None.
+    """
+    # Import every concrete subclass to ensure __subclasses__() sees them.
+    import importlib
+    import os
+    constraints_dir = os.path.join(os.path.dirname(__file__), "..", "TravSHACL", "constraints")
+    for entry in sorted(os.listdir(constraints_dir)):
+        if entry.endswith(".py") and entry not in {"__init__.py", "Constraint.py"}:
+            importlib.import_module("TravSHACL.constraints." + entry[:-3])
+
+    from TravSHACL.constraints.Constraint import Constraint
+
+    def all_subclasses(cls):
+        seen = set()
+        for sub in cls.__subclasses__():
+            if sub not in seen:
+                seen.add(sub)
+                yield sub
+                yield from all_subclasses(sub)
+
+    missing = []
+    for sub in all_subclasses(Constraint):
+        # Use the class-attribute access to avoid instance state requirements.
+        # get_source_component() needs an instance for dual-mode subclasses; the
+        # class attribute is the static contract checked here.
+        value = sub.SOURCE_COMPONENT
+        if value is None or not isinstance(value, str) or not value.startswith("http://www.w3.org/ns/shacl#"):
+            missing.append((sub.__name__, value))
+
+    assert missing == [], f"Constraint subclasses missing SOURCE_COMPONENT: {missing}"

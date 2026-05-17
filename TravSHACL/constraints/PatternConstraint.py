@@ -7,6 +7,8 @@ from TravSHACL.utils.VariableGenerator import VariableType
 class PatternConstraint(Constraint):
     """Represents sh:pattern constraints with optional sh:flags."""
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#PatternConstraintComponent"
+
     def __init__(self, var_generator, id_, path, pattern, is_pos, options, flags=None, target_def=None):
         super().__init__(id_, is_pos, None, None, pattern, None, target_def, path, options)
         self.varGenerator = var_generator

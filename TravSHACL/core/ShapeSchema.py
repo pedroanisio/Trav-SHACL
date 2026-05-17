@@ -170,8 +170,21 @@ class ShapeSchema:
             for child_name in child_shapes:
                 self.shapesDict[child_name].add_parent_shape(shape_name)
 
-    def validate(self):
-        """Executes the validation of the shape network."""
+    def validate(self, report_format=None):
+        """Executes the validation of the shape network.
+
+        :param report_format: optional sh:ValidationReport output format
+            (``"turtle"``/``"ttl"`` or ``"jsonld"``/``"json-ld"``). When None
+            (default), returns the existing per-shape dict for backward
+            compatibility with main.py, TravSHACL/app, and tests/test_cases.py.
+            When set, returns a tuple ``(dict, report_str)`` where the report
+            is a SHACL §3 / §6.4-conformant graph serialized in the chosen
+            format. Unsupported formats raise ``ValueError`` per the project
+            convention (semantic distinction: malformed input within scope
+            raises ValueError; out-of-scope features raise NotImplementedError).
+        :return: dict, or ``(dict, str)`` tuple per ``report_format``.
+        :raises ValueError: if ``report_format`` is not a supported format string.
+        """
         start = self.get_starting_point()
         node_order = self.graphTraversal.traverse_graph(
             self.dependencies, self.reverse_dependencies, start[0]
@@ -194,7 +207,7 @@ class ShapeSchema:
             self.outputDirName,
             self.saveStats,
             self.saveTargetsToFile,
-        ).exec()
+        ).exec(report_format=report_format)
         # return 'Go to log files in {} folder to see report'.format(self.outputDirName)
 
     def compute_in_and_outdegree(self):

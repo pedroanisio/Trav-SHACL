@@ -7,6 +7,8 @@ from TravSHACL.utils.VariableGenerator import VariableType
 class RangeMinExclusiveConstraint(Constraint):
     """Represents sh:minExclusive constraints."""
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#MinExclusiveConstraintComponent"
+
     def __init__(self, var_generator, id_, path, value, is_pos, options, target_def=None):
         super().__init__(id_, is_pos, None, None, value, None, target_def, path, options)
         self.varGenerator = var_generator

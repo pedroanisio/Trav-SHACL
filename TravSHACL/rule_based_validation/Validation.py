@@ -51,8 +51,13 @@ class Validation:
         self.valid_targets_after_termination: set[Any] = set()
         self.start_of_verification = time.time()
 
-    def exec(self):
-        """Executes the validation process of the entire shape schema."""
+    def exec(self, report_format=None):
+        """Executes the validation process of the entire shape schema.
+
+        :param report_format: optional sh:ValidationReport output format
+            (``"turtle"`` or ``"jsonld"``). When None, returns the existing
+            dict shape (backward compat). Otherwise returns ``(dict, report_str)``.
+        """
         focus_shape = self.shapes_dict[self.node_order.pop(0)]
         state = ValidationState(self.shapes_dict)
         initial_targets = self.retrieve_next_targets(state, focus_shape, state.shapes_state)
@@ -67,7 +72,7 @@ class Validation:
         self.stats.record_total_rules(state.total_rule_number)
         self.stats.update_log("\n\nMaximal number or rules in memory: " + str(self.stats.max_rules))
         self.stats.update_log("\nTotal number of rules: " + str(state.total_rule_number))
-        return self.validation_output(state.shapes_state)
+        return self.validation_output(state.shapes_state, report_format=report_format)
 
     def validate(self, state, focus_shape):
         """
@@ -623,12 +628,16 @@ class Validation:
         write_list_to_file(all_invalid_targets, violated_targets_file)
         fileManagement.close_file(violated_targets_file)
 
-    def validation_output(self, shapes_state):
+    def validation_output(self, shapes_state, report_format=None):
         """
-        Saves to local file the (in)validated targets and returns result of validation
+        Saves to local file the (in)validated targets and returns result of validation.
 
         :param shapes_state: dictionary storing validation's state of each shape
-        :return: dictionary containing shape names and their respective (in)validated targets
+        :param report_format: optional sh:ValidationReport format string
+            (``"turtle"`` or ``"jsonld"``). When None (default), returns the
+            existing dict shape (backward compat). Otherwise returns a tuple
+            ``(dict, report_str)`` where the report follows SHACL §3 / §6.4.
+        :return: dictionary, or ``(dict, str)`` tuple per ``report_format``.
         """
         output = {}
         all_valid_targets = set()
@@ -669,30 +678,22 @@ class Validation:
         # add to output all targets that could not be (in)validated by any shape
         output["unbound"] = {"valid_instances": self.valid_targets_after_termination}
 
-        # TTL validation report
+        # sh:ValidationReport emission (always built when save_stats writes the
+        # file OR when caller requests a specific report_format). Replaces the
+        # partial 4-field hand-written TTL writer that lived here pre-P3A; the
+        # new path produces full SHACL §3 / §6.4 conformant output via
+        # TravSHACL.output.ValidationReportSerializer.
         if self.save_stats:
-            if len(all_invalid_targets) == 0:
-                output_ttl = ":report a sh:ValidationReport ;\n" + "  sh:conforms true "
-            else:
-                output_ttl = ":report a sh:ValidationReport ;\n" + "  sh:conforms false ;\n" + "  sh:result"
-                for i, violation in enumerate(all_invalid_targets):
-                    if i != 0:
-                        output_ttl += " ,"
-                    output_ttl += (
-                        "\n    [ a  sh:ValidationResult ;\n"
-                        + "      sh:resultSeverity  sh:Violation ;\n"
-                        + "      sh:focusNode  <"
-                        + violation[1]
-                        + "> ;\n"
-                        + "      sh:sourceShape  "
-                        + violation[0]
-                        + " ]"
-                    )
-
-            output_ttl = "@prefix sh: <http://www.w3.org/ns/shacl#> . \n\n" + output_ttl + " ."
+            from TravSHACL.output.ValidationReportSerializer import serialize_validation_report
+            report_str = serialize_validation_report(shapes_state, self.shapes_dict, fmt="turtle")
             validation_report = fileManagement.open_file(self.output_dir_name, "validationReport.ttl")
-            validation_report.write(output_ttl)
+            validation_report.write(report_str)
             fileManagement.close_file(validation_report)
+
+        if report_format is not None:
+            from TravSHACL.output.ValidationReportSerializer import serialize_validation_report
+            report_str = serialize_validation_report(shapes_state, self.shapes_dict, fmt=report_format)
+            return output, report_str
         return output
 
 

@@ -7,6 +7,8 @@ from TravSHACL.utils.VariableGenerator import VariableGenerator
 class AndConstraint(Constraint):
     """Represents sh:and over referenced node shapes."""
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#AndConstraintComponent"
+
     def __init__(self, id_, shape_refs, is_pos, options, target_def=None):
         super().__init__(id_, is_pos, None, None, None, None, target_def, None, options)
         self.shapeRefs = tuple(shape_refs)

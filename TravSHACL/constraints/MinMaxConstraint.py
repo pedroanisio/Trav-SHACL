@@ -9,6 +9,8 @@ class MinMaxConstraint(Constraint):
     This class represents min-max constraints, i.e., a constraint for the minimal and maximal occurrence of a path.
     """
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#MinCountConstraintComponent"
+
     def __init__(
         self, var_generator, id_, path, min_, max_, is_pos, datatype=None, value=None, shape_ref=None, target_def=None
     ):

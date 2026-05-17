@@ -15,7 +15,7 @@ build/
 **/.DS_Store
 
 venv/
-output/
+/output/
 
 example/result/
 example/data/virtuoso/

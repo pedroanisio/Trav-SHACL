@@ -27,6 +27,8 @@ class XoneConstraint(Constraint):
     property inners (e.g., ``sh:xone ( [sh:datatype xsd:integer] ... )``).
     """
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#XoneConstraintComponent"
+
     def __init__(self, id_, shape_refs, is_pos, options, target_def=None):
         super().__init__(id_, is_pos, None, None, None, None, target_def, None, options)
         self.shapeRefs = tuple(shape_refs)

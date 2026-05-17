@@ -9,6 +9,8 @@ RDF_TYPE = "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"
 class ClosedConstraint(Constraint):
     """Represents sh:closed with parser-supplied allowed paths."""
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#ClosedConstraintComponent"
+
     def __init__(self, var_generator, id_, allowed_paths, ignored_properties, is_pos, options, target_def=None):
         super().__init__(id_, is_pos, None, None, None, None, target_def, None, options)
         self.varGenerator = var_generator

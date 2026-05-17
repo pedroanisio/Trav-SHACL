@@ -7,6 +7,8 @@ from TravSHACL.utils.VariableGenerator import VariableType
 class QualifiedValueShapeConstraint(Constraint):
     """Represents sh:qualifiedValueShape with min/max qualified counts."""
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#QualifiedMinCountConstraintComponent"
+
     def __init__(
         self,
         var_generator,
@@ -48,3 +50,15 @@ class QualifiedValueShapeConstraint(Constraint):
 
     def compute_rule_pattern_body(self):
         return [(self.shapeRef, variable, self.isPos) for variable in self.variables] if self.shapeRef is not None else []
+
+    def get_source_component(self):
+        """Return QualifiedMinCount or QualifiedMaxCount component IRI based on which bound is set.
+
+        Per ADR-006 Plan Reconciliation, the parser creates separate
+        QualifiedValueShapeConstraint instances for qualifiedMin and
+        qualifiedMax (one bound set per instance). This method picks the
+        spec component IRI matching the bound the instance carries.
+        """
+        if self.qualifiedMax is not None and self.qualifiedMin is None:
+            return "http://www.w3.org/ns/shacl#QualifiedMaxCountConstraintComponent"
+        return "http://www.w3.org/ns/shacl#QualifiedMinCountConstraintComponent"

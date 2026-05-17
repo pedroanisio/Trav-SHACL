@@ -7,6 +7,8 @@ from TravSHACL.utils.VariableGenerator import VariableType
 class LanguageInConstraint(Constraint):
     """Represents sh:languageIn constraints."""
 
+    SOURCE_COMPONENT = "http://www.w3.org/ns/shacl#LanguageInConstraintComponent"
+
     def __init__(self, var_generator, id_, path, languages, is_pos, options, target_def=None):
         super().__init__(id_, is_pos, None, None, languages, None, target_def, path, options)
         self.varGenerator = var_generator
