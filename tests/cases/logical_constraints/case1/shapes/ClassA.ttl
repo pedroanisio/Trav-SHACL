@@ -1,0 +1,23 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix test: <http://test.example.com/> .
+@prefix : <http://test.example.com/shapes/> .
+
+# sh:not over an atomic property-shape expression.
+# Per DEC-05, NotConstraint is atomic-only; the inner is an inline
+# property shape (sh:path + sh:minCount), not sh:property [...].
+#
+# This shape says: ClassA instances must NOT satisfy the inner shape
+# (which requires at least one test:property2). I.e., focus is valid
+# when it has zero test:property2 values.
+#
+# Expected (per inspection of tests/data/test.ttl):
+#   property2 present on: 1, 4, 5, 6
+#   property2 absent on:  0, 2, 3
+#   → valid: 0, 2, 3; invalid: 1, 4, 5, 6
+
+:ClassA a sh:NodeShape ;
+  sh:targetClass test:ClassA ;
+  sh:not [
+    sh:path test:property2 ;
+    sh:minCount 1
+  ] .

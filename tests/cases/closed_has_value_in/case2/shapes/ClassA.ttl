@@ -1,0 +1,28 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix test: <http://test.example.com/> .
+@prefix : <http://test.example.com/shapes/> .
+
+# sh:in — ClassA's property0 values must be in the enumerated set.
+# All instances with property0 have at least one of the listed values
+# (per test data, all property0 values are "some value" / "some other
+# value" / "yet another value" / "again another value", and our `sh:in`
+# list contains the first three).
+#
+# Expected:
+#   Instances 0, 1, 2, 3 have property0 = "some value" + possibly others
+#     all of which are subset of {some value, some other value, yet another value};
+#     Instance 3 ALSO has "again another value" which is NOT in the set.
+#   Instance 0: "some value"                              → all in set → valid
+#   Instance 1: "some value", "some other value"          → all in set → valid
+#   Instance 2: "some value", "some other value", "yet another value" → all in set → valid
+#   Instance 3: ... + "again another value"               → not all in set → invalid
+#   Instance 4: no property0                              → vacuously valid
+#   Instance 5: no property0                              → vacuously valid
+#   Instance 6: no property0                              → vacuously valid
+
+:ClassA a sh:NodeShape ;
+  sh:targetClass test:ClassA ;
+  sh:property [
+    sh:path test:property0 ;
+    sh:in ( "some value" "some other value" "yet another value" )
+  ] .

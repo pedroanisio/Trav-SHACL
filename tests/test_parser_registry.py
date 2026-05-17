@@ -538,7 +538,10 @@ def test_shape_reference_not_raises_not_implemented():
         _parse_ttl(source)
 
 
-def test_xone_raises_not_implemented_instead_of_silent_and_semantics():
+def test_xone_constraint_is_constructed_from_sh_xone():
+    """sh:xone over shape references produces an XoneConstraint with those refs."""
+    from TravSHACL.constraints.XoneConstraint import XoneConstraint
+
     source = """
         @prefix sh: <http://www.w3.org/ns/shacl#> .
         @prefix test: <http://test.example.com/> .
@@ -555,7 +558,34 @@ def test_xone_raises_not_implemented_instead_of_silent_and_semantics():
           sh:targetClass test:ClassC .
     """
 
-    with pytest.raises(NotImplementedError, match="sh:xone"):
+    shapes = _parse_ttl(source)
+    class_a = next(s for s in shapes if "/ClassA" in s.get_id())
+    xone_constraints = [c for c in class_a.constraints if isinstance(c, XoneConstraint)]
+    assert len(xone_constraints) == 1, "expected exactly one XoneConstraint on :ClassA"
+    assert len(xone_constraints[0].shapeRefs) == 2, "sh:xone should carry both shape refs"
+
+
+def test_xone_constraint_over_atomic_inner_raises_not_implemented():
+    """sh:xone over atomic property constraints is out of scope (shape-ref-only).
+
+    parse_shape_expression raises NotImplementedError when it can't extract a
+    shape reference from the inner expression — that's the failure path for
+    atomic inners. We assert the constraint is rejected, not the exact message,
+    since the rejection may originate in parse_shape_expression OR in
+    parse_constraint depending on the inner shape's structure.
+    """
+    source = """
+        @prefix sh: <http://www.w3.org/ns/shacl#> .
+        @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+        @prefix test: <http://test.example.com/> .
+        @prefix : <http://test.example.com/shapes/> .
+
+        :ClassA a sh:NodeShape ;
+          sh:targetClass test:ClassA ;
+          sh:xone ( [ sh:datatype xsd:integer ] [ sh:datatype xsd:string ] ) .
+    """
+
+    with pytest.raises(NotImplementedError):
         _parse_ttl(source)
 
 

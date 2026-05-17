@@ -42,6 +42,10 @@ def test_case(file, selective, graph_traversal, prio_target, prio_degree, prio_n
                 "value_range",
                 "string_constraints",
                 "pair_constraints",
+                "path_operators",
+                "logical_constraints",
+                "qualified_value_shape",
+                "closed_has_value_in",
             ]
         )
         and shape_format == "JSON"

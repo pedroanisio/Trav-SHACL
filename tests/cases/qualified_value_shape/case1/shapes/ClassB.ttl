@@ -1,0 +1,27 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix test: <http://test.example.com/> .
+@prefix : <http://test.example.com/shapes/> .
+
+# sh:qualifiedValueShape + sh:qualifiedMinCount 1.
+# ClassB is valid if it has at least one toC pointing to a ClassC
+# (where ClassC requires at least one property0).
+#
+# This is the same shape pattern as the existing tests/cases/two_shapes
+# fixture, used here to confirm qualified_value_shape end-to-end works
+# under the P2C-A's ADR-006 implementation (no sub-SELECT, propagation
+# via shape_ref into engine's traversal).
+
+:ClassB a sh:NodeShape ;
+  sh:targetClass test:ClassB ;
+  sh:property [
+    sh:path test:toC ;
+    sh:qualifiedValueShape [ sh:node :ClassC ] ;
+    sh:qualifiedMinCount 1
+  ] .
+
+:ClassC a sh:NodeShape ;
+  sh:targetClass test:ClassC ;
+  sh:property [
+    sh:path test:property0 ;
+    sh:minCount 1
+  ] .

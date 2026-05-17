@@ -1,0 +1,21 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix test: <http://test.example.com/> .
+@prefix : <http://test.example.com/shapes/> .
+
+# sh:not over an atomic property-shape with sh:minCount.
+# Distinct from case1 (which negates property2 existence): case2 negates
+# the property1-with-minCount-1 sub-shape, so it asserts focus must NOT
+# have any property1 values.
+#
+# Per inspection of tests/data/test.ttl:
+#   property1 present on: 0, 1, 2, 3, 5, 6
+#   property1 absent on:  4
+#   → valid: 4; invalid: 0, 1, 2, 3, 5, 6
+
+:ClassA a sh:NodeShape ;
+  sh:targetClass test:ClassA ;
+  sh:not [
+    sh:path test:property1 ;
+    sh:minCount 1
+  ] .

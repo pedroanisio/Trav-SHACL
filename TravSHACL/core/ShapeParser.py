@@ -36,6 +36,7 @@ from TravSHACL.constraints.RangeMinExclusiveConstraint import RangeMinExclusiveC
 from TravSHACL.constraints.RangeMinInclusiveConstraint import RangeMinInclusiveConstraint
 from TravSHACL.constraints.SPARQLConstraint import SPARQLConstraint
 from TravSHACL.constraints.UniqueLangConstraint import UniqueLangConstraint
+from TravSHACL.constraints.XoneConstraint import XoneConstraint
 from TravSHACL.core.Path import Alternative, Inverse, OneOrMore, PathExpression, Predicate, Sequence, ZeroOrMore, ZeroOrOne
 from TravSHACL.core.Shape import Shape
 from TravSHACL.utils.VariableGenerator import VariableGenerator
@@ -1019,7 +1020,12 @@ class ShapeParser:
             constraints.append(AndConstraint(id_, shape_refs, o_neg, options, target_def))
 
         if xone is not None:
-            raise NotImplementedError("sh:xone is not implemented")
+            if not xone:
+                raise ValueError("sh:xone must contain at least one shape reference")
+            shape_refs = [self.sparql_term(item["shape"]) for item in xone if isinstance(item, dict) and item.get("shape") is not None]
+            if len(shape_refs) != len(xone):
+                raise NotImplementedError("sh:xone currently supports only shape references")
+            constraints.append(XoneConstraint(id_, shape_refs, o_neg, options, target_def))
 
         if isinstance(negated, dict):
             nested = self.parse_constraint(var_generator, negated, id_ + "_not", target_def, None)

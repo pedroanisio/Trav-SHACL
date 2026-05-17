@@ -1,0 +1,27 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix test: <http://test.example.com/> .
+@prefix : <http://test.example.com/shapes/> .
+
+# sh:qualifiedValueShape with BOTH qualifiedMinCount AND qualifiedMaxCount.
+# Per ADR-006, the parser creates two separate QualifiedValueShapeConstraint
+# instances (one min-shaped, one max-shaped) that propagate to the engine
+# via shape_ref. This case verifies both bounds work together.
+#
+# Shape: ClassB must have between 1 and 2 (inclusive) toC edges pointing
+# to a satisfying ClassC. ClassC requires at least one property0.
+
+:ClassB a sh:NodeShape ;
+  sh:targetClass test:ClassB ;
+  sh:property [
+    sh:path test:toC ;
+    sh:qualifiedValueShape [ sh:node :ClassC ] ;
+    sh:qualifiedMinCount 1 ;
+    sh:qualifiedMaxCount 2
+  ] .
+
+:ClassC a sh:NodeShape ;
+  sh:targetClass test:ClassC ;
+  sh:property [
+    sh:path test:property0 ;
+    sh:minCount 1
+  ] .

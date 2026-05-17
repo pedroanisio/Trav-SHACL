@@ -1,0 +1,20 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix test: <http://test.example.com/> .
+@prefix : <http://test.example.com/shapes/> .
+
+# sh:hasValue — ClassA must have "some value" as one of its property0 values.
+# Per inspection of tests/data/test.ttl:
+#   ClassA_Instance0: property0 = "some value"           → valid
+#   ClassA_Instance1: property0 = "some value", "some other" → valid
+#   ClassA_Instance2: property0 = "some value", "some other", "yet another" → valid
+#   ClassA_Instance3: property0 = "some value", "some other", "yet another", "again another" → valid
+#   ClassA_Instance4: no property0                        → invalid
+#   ClassA_Instance5: no property0                        → invalid
+#   ClassA_Instance6: no property0                        → invalid
+
+:ClassA a sh:NodeShape ;
+  sh:targetClass test:ClassA ;
+  sh:property [
+    sh:path test:property0 ;
+    sh:hasValue "some value"
+  ] .
