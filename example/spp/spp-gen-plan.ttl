@@ -1,0 +1,516 @@
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix spp: <https://software-project-plan.org/v5/ontology#> .
+@prefix sppc: <https://software-project-plan.org/v5/concept/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex: <https://anthropic.example/spp-gen/v0.1/> .
+
+###
+### SPP-on-SPP, v5.0.0 edition. The spp-gen compiler's spec, written in SPP v5.0.0.
+### Plan version 0.1.1: target retargeted from Node.js/TypeScript/Fastify to
+### Rust/Cargo. This file is the maintained Rust-target plan.
+###
+### Loaded against the canonical SPP v5.0.0 ontology namespace.
+###
+### Each marked-NEW item exercises a v5.0.0 addition covered by the Rust
+### frontend validator and regression fixtures.
+###
+
+ex:plan a spp:SoftwareProjectPlan ;
+    dcterms:title "SPP System Compiler" ;
+    spp:planName "SppSystemCompiler" ;
+    spp:planVersion "0.1.1" ;
+    dcterms:issued "2026-05-16"^^xsd:date ;
+    dcterms:creator "Anthropic / Claude (assisted)" ;
+    dcterms:license "Apache-2.0" ;
+    # NEW v5.0.0: emissionMode + behavior grammar — declares the strict-profile
+    # quality gate and the grammar of all behavior expressions in this plan.
+    spp:emissionMode "strict" ;
+    spp:planBehaviorGrammar sppc:bg-prose ;
+    spp:projectKind sppc:pk-cli ;
+    spp:visibility sppc:vis-open-source ;
+    spp:tenancyModel sppc:tenancy-single ;
+    spp:securityModel sppc:sm-least-privilege ;
+    spp:privacyPosture sppc:priv-not-considered ;
+    spp:observabilityPractice sppc:obs-logs, sppc:obs-slo-sli-sla ;
+    spp:sbomPolicy sppc:sbom-policy-published ;
+    spp:runtimePlatform sppc:rt-rust ;
+    spp:buildTool sppc:bt-cargo ;
+    spp:engineeringPractice sppc:ep-tdd, sppc:ep-trunk-based ;
+    # NEW v5.0.0: concrete SLOs with numeric targets (codegen-parity)
+    spp:serviceLevelObjective ex:slo-emit-time, ex:slo-determinism, ex:slo-test-pass ;
+    spp:component ex:c-frontend, ex:c-backend-rust, ex:c-cli .
+
+# NEW v5.0.0: ServiceLevelObjective with concrete values
+ex:slo-emit-time a spp:ServiceLevelObjective ;
+    spp:sloMetric "p95_emit_time_ms" ; spp:sloTarget "60000"^^xsd:decimal ; spp:sloWindow "P30D"^^xsd:duration .
+ex:slo-determinism a spp:ServiceLevelObjective ;
+    spp:sloMetric "deterministic_emission_fraction" ; spp:sloTarget "1.0"^^xsd:decimal ; spp:sloWindow "P30D"^^xsd:duration .
+ex:slo-test-pass a spp:ServiceLevelObjective ;
+    spp:sloMetric "ci_test_pass_rate" ; spp:sloTarget "0.99"^^xsd:decimal ; spp:sloWindow "P7D"^^xsd:duration .
+
+### Cross-component error classes
+ex:err-parse-failed a spp:ErrorClass ;
+    spp:errorClassName "parse_failed" ; spp:errorClassStatus 400 ; spp:errorClassRetryable false ;
+    spp:errorClassDescription "Input TTL could not be parsed as RDF." .
+ex:err-validation-failed a spp:ErrorClass ;
+    spp:errorClassName "validation_failed" ; spp:errorClassStatus 422 ; spp:errorClassRetryable false ;
+    spp:errorClassDescription "SHACL validation reported one or more violations." .
+ex:err-lowering-failed a spp:ErrorClass ;
+    spp:errorClassName "lowering_failed" ; spp:errorClassStatus 422 ; spp:errorClassRetryable false ;
+    spp:errorClassDescription "Graph could not be lowered to a well-typed System IR." .
+ex:err-unsupported-capability a spp:ErrorClass ;
+    spp:errorClassName "unsupported_capability" ; spp:errorClassStatus 501 ; spp:errorClassRetryable false ;
+    spp:errorClassDescription "Backend cannot emit one or more aspects." .
+ex:err-file-write a spp:ErrorClass ;
+    spp:errorClassName "file_write_failed" ; spp:errorClassStatus 500 ; spp:errorClassRetryable true ;
+    spp:errorClassDescription "Output file could not be written." .
+ex:err-invalid-args a spp:ErrorClass ;
+    spp:errorClassName "invalid_arguments" ; spp:errorClassStatus 400 ; spp:errorClassRetryable false .
+ex:err-backend-not-found a spp:ErrorClass ;
+    spp:errorClassName "backend_not_found" ; spp:errorClassStatus 404 ; spp:errorClassRetryable false .
+ex:err-record-failed a spp:ErrorClass ;
+    spp:errorClassName "record_assumption_failed" ; spp:errorClassStatus 500 ; spp:errorClassRetryable false .
+
+###############################################################################
+# Component 1: Frontend — pure transformers, ephemeral entities
+###############################################################################
+
+ex:c-frontend a spp:Component ;
+    spp:componentName "SppFrontend" ;
+    spp:moduleRole sppc:mr-adapter ;
+    spp:entity ex:e-plan-graph, ex:e-system-ir, ex:e-aspect-stack, ex:e-validation-report ;
+    spp:typeDecl ex:t-iri, ex:t-aspect-kind ;
+    spp:aggregate ex:agg-system-ir ;
+    spp:command ex:cmd-load-plan, ex:cmd-validate-plan, ex:cmd-lower-to-ir, ex:cmd-compose-aspect-stack ;
+    spp:query ex:q-trace-aspect-decision ;
+    spp:event ex:evt-plan-loaded, ex:evt-plan-validated, ex:evt-plan-rejected, ex:evt-ir-lowered ;
+    spp:errorClass ex:err-parse-failed, ex:err-validation-failed, ex:err-lowering-failed,
+                   ex:err-invalid-args ;
+    spp:causalRule ex:cr-load-before-validate, ex:cr-validate-before-lower ;
+    spp:interface ex:iface-frontend .
+
+ex:cr-load-before-validate a spp:CausalOrderingRule ;
+    spp:causalBefore ex:evt-plan-loaded ; spp:causalAfter ex:evt-plan-validated .
+ex:cr-validate-before-lower a spp:CausalOrderingRule ;
+    spp:causalBefore ex:evt-plan-validated ; spp:causalAfter ex:evt-ir-lowered .
+
+ex:t-iri a spp:PrimitiveType ; spp:typeName "Iri" ; spp:primitiveBase "string" .
+ex:t-aspect-kind a spp:Enumeration ; spp:typeName "AspectKind" ;
+    spp:enumValue "observability-enter", "tenancy-resolve", "operation-auth",
+                  "object-auth-input", "object-auth-target", "idempotency-check",
+                  "transaction-begin", "version-read", "query-fetch", "precondition-check",
+                  "mutate", "invariant-check", "outbox-write", "version-conditional-write",
+                  "transaction-commit", "idempotency-record", "observability-exit", "error-envelope" .
+
+# NEW v5.0.0: entityLifecycle on every entity. All four are ephemeral
+# (in-memory only) — strict mode's StrictPersistentEntityNeedsBindingShape
+# skips them precisely because of this declaration. Findings §3.1 closed.
+ex:e-plan-graph a spp:Entity ;
+    spp:entityName "PlanGraph" ;
+    spp:entityLifecycle sppc:el-ephemeral ;
+    spp:entityField ex:f-graph-iri, ex:f-graph-tc, ex:f-graph-path .
+ex:f-graph-iri  a spp:FieldDecl ; spp:fieldName "source_iri"   ; spp:fieldType "Iri"     ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+ex:f-graph-tc   a spp:FieldDecl ; spp:fieldName "triple_count" ; spp:fieldType "integer" ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+ex:f-graph-path a spp:FieldDecl ; spp:fieldName "source_path"  ; spp:fieldType "string"  ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+
+ex:e-system-ir a spp:Entity ;
+    spp:entityName "SystemIR" ;
+    spp:entityLifecycle sppc:el-ephemeral ;
+    spp:entityField ex:f-ir-name, ex:f-ir-ver, ex:f-ir-class, ex:f-ir-mods .
+ex:f-ir-name  a spp:FieldDecl ; spp:fieldName "plan_name"    ; spp:fieldType "string"  ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+ex:f-ir-ver   a spp:FieldDecl ; spp:fieldName "plan_version" ; spp:fieldType "string"  ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+ex:f-ir-class a spp:FieldDecl ; spp:fieldName "system_class" ; spp:fieldType "string"  ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+ex:f-ir-mods  a spp:FieldDecl ; spp:fieldName "module_count" ; spp:fieldType "integer" ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+
+ex:e-aspect-stack a spp:Entity ;
+    spp:entityName "AspectStack" ;
+    spp:entityLifecycle sppc:el-ephemeral ;
+    spp:entityField ex:f-stack-op, ex:f-stack-n .
+ex:f-stack-op a spp:FieldDecl ; spp:fieldName "operation_id" ; spp:fieldType "Iri"     ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+ex:f-stack-n  a spp:FieldDecl ; spp:fieldName "aspect_count" ; spp:fieldType "integer" ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+
+ex:e-validation-report a spp:Entity ;
+    spp:entityName "ValidationReport" ;
+    spp:entityLifecycle sppc:el-ephemeral ;
+    spp:entityField ex:f-vr-c, ex:f-vr-n .
+ex:f-vr-c a spp:FieldDecl ; spp:fieldName "conforms"        ; spp:fieldType "boolean" ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+ex:f-vr-n a spp:FieldDecl ; spp:fieldName "violation_count" ; spp:fieldType "integer" ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+
+ex:agg-system-ir a spp:Aggregate ;
+    spp:aggregateName "SystemIRAggregate" ;
+    spp:aggregateRoot ex:e-system-ir ;
+    spp:aggregateMember ex:e-aspect-stack .
+
+# NEW v5.0.0: operationPurity sppc:op-pure on every frontend command.
+# Strict-profile shapes exempt pure operations from auth, idempotency,
+# behavior rule requirements. Findings §3.2 closed.
+ex:cmd-load-plan a spp:Command ;
+    spp:commandName "LoadPlan" ;
+    spp:targetAggregate ex:agg-system-ir ;
+    spp:commandEffectOp sppc:effect-create ;
+    spp:operationPurity sppc:op-pure ;
+    spp:commandError ex:err-parse-failed ;
+    spp:commandEmits ex:evt-plan-loaded, ex:evt-plan-rejected ;
+    spp:commandRule """rule LoadPlan:
+        require readable(input.source_path)
+        on success: create PlanGraph(source_iri = file://input.source_path,
+                                     triple_count = |parse(read(input.source_path))|)
+                    emit PlanLoaded
+        on parse_error: emit PlanRejected(reason = parse_failed)""" ;
+    rdfs:comment "crates/spp-frontend/src/parse.rs::load" .
+
+ex:cmd-validate-plan a spp:Command ;
+    spp:commandName "ValidatePlan" ;
+    spp:targetAggregate ex:agg-system-ir ;
+    spp:commandEffectOp sppc:effect-side-effect ;
+    spp:operationPurity sppc:op-pure ;
+    spp:commandError ex:err-validation-failed ;
+    spp:commandEmits ex:evt-plan-validated, ex:evt-plan-rejected ;
+    spp:commandRule """rule ValidatePlan:
+        require input.plan_graph ≠ ∅ and |input.ontology_graphs| ≥ 1
+        merged := input.plan_graph ∪ input.ontology_graphs
+        report := shacl_validate(merged)
+        if report.conforms: emit PlanValidated
+        else: emit PlanRejected(reason = validation_failed)""" .
+
+ex:cmd-lower-to-ir a spp:Command ;
+    spp:commandName "LowerToIR" ;
+    spp:targetAggregate ex:agg-system-ir ;
+    spp:commandEffectOp sppc:effect-create ;
+    spp:operationPurity sppc:op-pure ;
+    spp:commandError ex:err-lowering-failed ;
+    spp:commandEmits ex:evt-ir-lowered ;
+    spp:commandRule """rule LowerToIR:
+        require report : ValidationReport ∧ report.conforms ∧ report.plan_graph = input.plan_graph
+        ir := traverse_graph_to_typed_ir(input.plan_graph)
+        for each op in ir.operations: attach ComposeAspectStack(op, ir.persistence_bindings)
+        emit IRLowered""" ;
+    rdfs:comment "crates/spp-frontend/src/lower.rs::lower" .
+
+ex:cmd-compose-aspect-stack a spp:Command ;
+    spp:commandName "ComposeAspectStack" ;
+    spp:targetAggregate ex:agg-system-ir ;
+    spp:commandEffectOp sppc:effect-create ;
+    spp:operationPurity sppc:op-pure ;
+    spp:commandError ex:err-lowering-failed ;
+    spp:commandRule """rule ComposeAspectStack:
+        require input.operation.kind ∈ {command, query}
+        positions (in order, conditioned by IR shape):
+            observability-enter
+            tenancy-resolve            if persistence.tenant_field exists
+            operation-auth
+            object-auth-input          if predicate references input.*
+            idempotency-check          if mutating and idempotency_key declared
+            transaction-begin          if mutating
+            version-read               if mutating and effect != create and version_field exists
+            query-fetch                if operation.kind = query
+            object-auth-target         if predicate references target.* or result.*
+            precondition-check
+            mutate                     if body present
+            invariant-check
+            outbox-write               if mutating and emits non-empty
+            version-conditional-write  if version_field
+            transaction-commit         if mutating
+            idempotency-record         if mutating and idempotency_key declared
+            observability-exit
+            error-envelope
+        phases: pre-tx | in-tx | post-tx — bounded by transaction-begin / transaction-commit markers""" ;
+    rdfs:comment "crates/spp-frontend/src/compose.rs::compose_aspect_stack" .
+
+# NEW v5.0.0: operationPurity on Query
+ex:q-trace-aspect-decision a spp:Query ;
+    spp:queryName "TraceAspectDecision" ;
+    spp:queryTarget ex:e-aspect-stack ;
+    spp:operationPurity sppc:op-pure ;
+    spp:queryError ex:err-invalid-args .
+
+ex:evt-plan-loaded a spp:Event ;
+    spp:eventName "PlanLoaded" ;
+    spp:eventVersion 1 ; spp:eventCompatibility "backward" ;
+    spp:eventPayload ex:f-evt-piri, ex:f-evt-tc .
+ex:evt-plan-validated a spp:Event ;
+    spp:eventName "PlanValidated" ;
+    spp:eventVersion 1 ; spp:eventCompatibility "backward" ;
+    spp:eventPayload ex:f-evt-piri .
+ex:evt-plan-rejected a spp:Event ;
+    spp:eventName "PlanRejected" ;
+    spp:eventVersion 1 ; spp:eventCompatibility "backward" ;
+    spp:eventPayload ex:f-evt-piri, ex:f-evt-reason .
+ex:evt-ir-lowered a spp:Event ;
+    spp:eventName "IRLowered" ;
+    spp:eventVersion 1 ; spp:eventCompatibility "backward" ;
+    spp:eventPayload ex:f-evt-pname, ex:f-evt-mods .
+
+ex:f-evt-piri   a spp:FieldDecl ; spp:fieldName "plan_graph_iri" ; spp:fieldType "Iri"     ; spp:fieldCardinality "one" .
+ex:f-evt-tc     a spp:FieldDecl ; spp:fieldName "triple_count"   ; spp:fieldType "integer" ; spp:fieldCardinality "one" .
+ex:f-evt-pname  a spp:FieldDecl ; spp:fieldName "plan_name"      ; spp:fieldType "string"  ; spp:fieldCardinality "one" .
+ex:f-evt-mods   a spp:FieldDecl ; spp:fieldName "module_count"   ; spp:fieldType "integer" ; spp:fieldCardinality "one" .
+ex:f-evt-reason a spp:FieldDecl ; spp:fieldName "reason"         ; spp:fieldType "string"  ; spp:fieldCardinality "one" .
+
+ex:iface-frontend a spp:Interface ;
+    spp:interfaceTransport ex:tr-lib ;
+    spp:interfaceWireFormat ex:wf-internal ;
+    spp:interfaceAuthScheme ex:auth-internal ;
+    spp:interfaceErrorClass ex:err-parse-failed, ex:err-validation-failed, ex:err-lowering-failed, ex:err-invalid-args ;
+    spp:interfaceErrorEnvelope ex:env-internal ;
+    spp:interfaceOperationBinding ex:ob-load, ex:ob-validate, ex:ob-lower, ex:ob-compose, ex:ob-trace .
+
+###############################################################################
+# Component 2: Backend
+###############################################################################
+
+ex:c-backend-rust a spp:Component ;
+    spp:componentName "SppBackendRust" ;
+    spp:moduleRole sppc:mr-adapter ;
+    spp:entity ex:e-backend-capability, ex:e-emitted-file, ex:e-assumption-record ;
+    spp:aggregate ex:agg-emission ;
+    spp:command ex:cmd-check-capability, ex:cmd-emit-project, ex:cmd-emit-file, ex:cmd-record-assumption ;
+    spp:event ex:evt-project-emitted, ex:evt-capability-refused, ex:evt-file-emitted, ex:evt-assumption-recorded ;
+    spp:errorClass ex:err-unsupported-capability, ex:err-file-write, ex:err-record-failed ;
+    spp:declaredDependency ex:dep-frontend ;
+    spp:causalRule ex:cr-check-before-emit ;
+    spp:interface ex:iface-backend .
+
+ex:dep-frontend a spp:Dependency ; spp:dependencyName "SppFrontend" .
+
+ex:cr-check-before-emit a spp:CausalOrderingRule ;
+    spp:causalBefore ex:evt-capability-refused ;
+    spp:causalAfter ex:evt-project-emitted .
+
+# NEW v5.0.0: entityLifecycle on backend entities. EmittedFile and
+# ProvenanceManifest are session-scoped (one per CLI invocation, then
+# discarded after the process exits — they're persisted to the filesystem
+# but not managed as records). Backend capability is ephemeral (a static
+# constant compiled into the backend). AssumptionRecord is session-scoped.
+ex:e-backend-capability a spp:Entity ;
+    spp:entityName "BackendCapability" ;
+    spp:entityLifecycle sppc:el-ephemeral ;
+    spp:entityField ex:f-bc-name, ex:f-bc-kinds .
+ex:f-bc-name  a spp:FieldDecl ; spp:fieldName "backend_name"           ; spp:fieldType "string"     ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+ex:f-bc-kinds a spp:FieldDecl ; spp:fieldName "supported_aspect_kinds" ; spp:fieldType "AspectKind" ; spp:fieldCardinality "many" ; spp:fieldClassification sppc:pii-none .
+
+ex:e-emitted-file a spp:Entity ;
+    spp:entityName "EmittedFile" ;
+    spp:entityLifecycle sppc:el-session ;
+    spp:entityField ex:f-ef-path, ex:f-ef-hash, ex:f-ef-size .
+ex:f-ef-path a spp:FieldDecl ; spp:fieldName "relative_path"  ; spp:fieldType "string"  ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+ex:f-ef-hash a spp:FieldDecl ; spp:fieldName "content_sha256" ; spp:fieldType "string"  ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+ex:f-ef-size a spp:FieldDecl ; spp:fieldName "byte_size"      ; spp:fieldType "integer" ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+
+ex:e-assumption-record a spp:Entity ;
+    spp:entityName "AssumptionRecord" ;
+    spp:entityLifecycle sppc:el-session ;
+    spp:entityField ex:f-ar-cat, ex:f-ar-desc .
+ex:f-ar-cat  a spp:FieldDecl ; spp:fieldName "category"    ; spp:fieldType "string" ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+ex:f-ar-desc a spp:FieldDecl ; spp:fieldName "description" ; spp:fieldType "string" ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+
+ex:agg-emission a spp:Aggregate ;
+    spp:aggregateName "EmissionAggregate" ;
+    spp:aggregateRoot ex:e-emitted-file ;
+    spp:aggregateMember ex:e-assumption-record .
+
+# Backend operations: CheckCapability is pure; the three Emit* are effectful
+# (they write to disk). NEW v5.0.0: operationPurity declared on each;
+# operationAnonymous on the effectful ones (filesystem-trust model).
+ex:cmd-check-capability a spp:Command ;
+    spp:commandName "CheckCapability" ;
+    spp:targetAggregate ex:agg-emission ;
+    spp:commandEffectOp sppc:effect-side-effect ;
+    spp:operationPurity sppc:op-pure ;
+    spp:commandError ex:err-unsupported-capability ;
+    spp:commandEmits ex:evt-capability-refused ;
+    spp:commandRule "for each op, for each aspect: aspect.kind ∈ backend.supported_aspect_kinds; else raise unsupported_capability" ;
+    rdfs:comment "crates/spp-backend-rust/src/check.rs::check_capabilities; tested in crates/spp-backend-rust/tests/end_to_end.rs" .
+
+ex:cmd-emit-project a spp:Command ;
+    spp:commandName "EmitProject" ;
+    spp:targetAggregate ex:agg-emission ;
+    spp:commandEffectOp sppc:effect-create ;
+    spp:operationPurity sppc:op-effectful ;
+    spp:operationAnonymous true ;
+    spp:idempotencyKeyField "system_ir_hash" ;
+    spp:idempotencyRetention "PT0S"^^xsd:duration ;
+    spp:commandError ex:err-unsupported-capability, ex:err-file-write ;
+    spp:commandEmits ex:evt-project-emitted ;
+    spp:commandRule """rule EmitProject:
+        require well_formed(input.system_ir) ∧ CheckCapability passes
+        for each planned_file in input.system_ir:
+            EmitFile(planned_file)
+        record ProvenanceManifest
+        emit ProjectEmitted""" .
+
+ex:cmd-emit-file a spp:Command ;
+    spp:commandName "EmitFile" ;
+    spp:targetAggregate ex:agg-emission ;
+    spp:commandEffectOp sppc:effect-create ;
+    spp:operationPurity sppc:op-effectful ;
+    spp:operationAnonymous true ;
+    spp:idempotencyKeyField "relative_path" ;
+    spp:idempotencyRetention "PT0S"^^xsd:duration ;
+    spp:commandError ex:err-file-write ;
+    spp:commandEmits ex:evt-file-emitted ;
+    spp:commandRule "atomic write; emit FileEmitted on success" .
+
+ex:cmd-record-assumption a spp:Command ;
+    spp:commandName "RecordAssumption" ;
+    spp:targetAggregate ex:agg-emission ;
+    spp:commandEffectOp sppc:effect-append ;
+    spp:operationPurity sppc:op-effectful ;
+    spp:operationAnonymous true ;
+    spp:idempotencyKeyField "description" ;
+    spp:idempotencyRetention "PT0S"^^xsd:duration ;
+    spp:commandError ex:err-record-failed ;
+    spp:commandEmits ex:evt-assumption-recorded ;
+    spp:commandRule "append AssumptionRecord; emit AssumptionRecorded" .
+
+ex:evt-project-emitted    a spp:Event ; spp:eventName "ProjectEmitted"    ; spp:eventVersion 1 ; spp:eventCompatibility "backward" ; spp:eventPayload ex:f-evt-fcount, ex:f-evt-pname .
+ex:evt-capability-refused a spp:Event ; spp:eventName "CapabilityRefused" ; spp:eventVersion 1 ; spp:eventCompatibility "backward" ; spp:eventPayload ex:f-evt-akind, ex:f-evt-opname .
+ex:evt-file-emitted       a spp:Event ; spp:eventName "FileEmitted"       ; spp:eventVersion 1 ; spp:eventCompatibility "backward" ; spp:eventPayload ex:f-evt-rpath .
+ex:evt-assumption-recorded a spp:Event ; spp:eventName "AssumptionRecorded" ; spp:eventVersion 1 ; spp:eventCompatibility "backward" ; spp:eventPayload ex:f-evt-cat .
+
+ex:f-evt-fcount a spp:FieldDecl ; spp:fieldName "file_count"     ; spp:fieldType "integer"    ; spp:fieldCardinality "one" .
+ex:f-evt-akind  a spp:FieldDecl ; spp:fieldName "aspect_kind"    ; spp:fieldType "AspectKind" ; spp:fieldCardinality "one" .
+ex:f-evt-opname a spp:FieldDecl ; spp:fieldName "operation_name" ; spp:fieldType "string"     ; spp:fieldCardinality "one" .
+ex:f-evt-rpath  a spp:FieldDecl ; spp:fieldName "relative_path"  ; spp:fieldType "string"     ; spp:fieldCardinality "one" .
+ex:f-evt-cat    a spp:FieldDecl ; spp:fieldName "category"       ; spp:fieldType "string"     ; spp:fieldCardinality "one" .
+
+ex:iface-backend a spp:Interface ;
+    spp:interfaceTransport ex:tr-lib ;
+    spp:interfaceWireFormat ex:wf-internal ;
+    spp:interfaceAuthScheme ex:auth-internal ;
+    spp:interfaceErrorClass ex:err-unsupported-capability, ex:err-file-write, ex:err-record-failed ;
+    spp:interfaceErrorEnvelope ex:env-internal ;
+    spp:interfaceOperationBinding ex:ob-check, ex:ob-emit-project, ex:ob-emit-file, ex:ob-record .
+
+###############################################################################
+# Component 3: CLI — with cross-component Saga (NEW v5.0.0)
+###############################################################################
+
+ex:c-cli a spp:Component ;
+    spp:componentName "SppCli" ;
+    spp:moduleRole sppc:mr-application ;
+    spp:entity ex:e-provenance-manifest ;
+    spp:aggregate ex:agg-cli ;
+    spp:command ex:cmd-emit-cli ;
+    spp:guard ex:g-emit-cli-idempotency ;
+    spp:query ex:q-describe ;
+    spp:event ex:evt-command-received, ex:evt-emission-completed ;
+    spp:errorClass ex:err-invalid-args, ex:err-backend-not-found, ex:err-parse-failed,
+                   ex:err-validation-failed, ex:err-lowering-failed,
+                   ex:err-unsupported-capability, ex:err-file-write ;
+    spp:declaredDependency ex:dep-front-cli, ex:dep-back-cli ;
+    # NEW v5.0.0: Saga can now reference cross-component commands via the
+    # relaxed SagaLocalReferenceShape, provided each referenced command
+    # lives on a component reachable through declaredDependency. The
+    # required matching by dependencyName means SppFrontend and
+    # SppBackendTsFastify must be the componentName of resolved dependencies.
+    spp:saga ex:saga-emit-pipeline ;
+    spp:interface ex:iface-cli .
+
+ex:dep-front-cli a spp:Dependency ; spp:dependencyName "SppFrontend" .
+ex:dep-back-cli  a spp:Dependency ; spp:dependencyName "SppBackendRust" .
+
+# NEW v5.0.0: cross-component Saga modelling the emit pipeline.
+# Findings §3.5 closed by the relaxed locality SPARQL.
+ex:saga-emit-pipeline a spp:Saga ;
+    spp:sagaName "EmitPipeline" ;
+    spp:sagaTriggerEvent ex:evt-command-received ;
+    spp:sagaStep ex:ss-load, ex:ss-validate, ex:ss-lower, ex:ss-check, ex:ss-emit .
+
+ex:ss-load     a spp:SagaStep ; spp:sagaStepName "Load"     ; spp:sagaStepCommand ex:cmd-load-plan .
+ex:ss-validate a spp:SagaStep ; spp:sagaStepName "Validate" ; spp:sagaStepCommand ex:cmd-validate-plan .
+ex:ss-lower    a spp:SagaStep ; spp:sagaStepName "Lower"    ; spp:sagaStepCommand ex:cmd-lower-to-ir .
+ex:ss-check    a spp:SagaStep ; spp:sagaStepName "Check"    ; spp:sagaStepCommand ex:cmd-check-capability .
+ex:ss-emit     a spp:SagaStep ; spp:sagaStepName "Emit"     ; spp:sagaStepCommand ex:cmd-emit-project .
+
+ex:e-provenance-manifest a spp:Entity ;
+    spp:entityName "ProvenanceManifest" ;
+    spp:entityLifecycle sppc:el-session ;
+    spp:entityField ex:f-pm-name, ex:f-pm-time, ex:f-pm-ver, ex:f-pm-hash .
+ex:f-pm-name a spp:FieldDecl ; spp:fieldName "plan_name"        ; spp:fieldType "string" ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+ex:f-pm-time a spp:FieldDecl ; spp:fieldName "emitted_at_utc"   ; spp:fieldType "string" ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+ex:f-pm-ver  a spp:FieldDecl ; spp:fieldName "tool_version"     ; spp:fieldType "string" ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+ex:f-pm-hash a spp:FieldDecl ; spp:fieldName "file_list_sha256" ; spp:fieldType "string" ; spp:fieldCardinality "one" ; spp:fieldClassification sppc:pii-none .
+
+ex:agg-cli a spp:Aggregate ;
+    spp:aggregateName "CliInvocationAggregate" ;
+    spp:aggregateRoot ex:e-provenance-manifest .
+
+ex:cmd-emit-cli a spp:Command ;
+    spp:commandName "EmitCli" ;
+    spp:targetAggregate ex:agg-cli ;
+    spp:commandEffectOp sppc:effect-side-effect ;
+    spp:commandEffectPolarity sppc:pol-mutating-terminal ;
+    spp:operationPurity sppc:op-effectful ;
+    spp:operationAnonymous true ;
+    spp:idempotencyKeyField "argv_hash" ;
+    spp:commandError ex:err-invalid-args, ex:err-backend-not-found,
+                     ex:err-parse-failed, ex:err-validation-failed,
+                     ex:err-lowering-failed, ex:err-unsupported-capability,
+                     ex:err-file-write ;
+    spp:commandEmits ex:evt-command-received, ex:evt-emission-completed ;
+    spp:commandRule """rule EmitCli:
+        require argv ⊇ {--plan, --target, --out} ∧ exists(plan_path) ∧ registered(target)
+        execute saga EmitPipeline triggered by CommandReceived
+        on success: write ProvenanceManifest; emit EmissionCompleted""" ;
+    rdfs:comment "crates/spp-cli/src/main.rs::main; orchestrates the EmitPipeline saga." .
+
+ex:g-emit-cli-idempotency a spp:Guard ;
+    spp:guardNode ex:cmd-emit-cli ;
+    spp:guardKind sppc:gk-idempotency-key ;
+    spp:guardParams "{\"field\":\"argv_hash\"}" .
+
+ex:q-describe a spp:Query ;
+    spp:queryName "DescribeCapabilities" ;
+    spp:queryTarget ex:e-backend-capability ;
+    spp:operationPurity sppc:op-pure ;
+    spp:queryError ex:err-invalid-args .
+
+ex:evt-command-received   a spp:Event ; spp:eventName "CommandReceived"   ; spp:eventVersion 1 ; spp:eventCompatibility "backward" ; spp:eventPayload ex:f-evt-ppath, ex:f-evt-tgt .
+ex:evt-emission-completed a spp:Event ; spp:eventName "EmissionCompleted" ; spp:eventVersion 1 ; spp:eventCompatibility "backward" ; spp:eventPayload ex:f-evt-pname, ex:f-evt-fcount .
+
+ex:f-evt-ppath a spp:FieldDecl ; spp:fieldName "plan_path" ; spp:fieldType "string" ; spp:fieldCardinality "one" .
+ex:f-evt-tgt   a spp:FieldDecl ; spp:fieldName "target"    ; spp:fieldType "string" ; spp:fieldCardinality "one" .
+
+###############################################################################
+# Interface objects — NEW v5.0.0: use the now-admitted CLI / library / none concepts.
+# Findings §3.3 closed: no more "http" stand-ins.
+###############################################################################
+
+ex:tr-lib a spp:Transport ; spp:transportName "InternalLibraryCall" ; spp:transportKind "library" .
+ex:tr-cli a spp:Transport ; spp:transportName "CommandLine"         ; spp:transportKind "cli" .
+
+ex:wf-internal a spp:WireFormat ; spp:wireFormatName "InternalObjects" ; spp:wireFormatKind "internal" .
+ex:wf-cli      a spp:WireFormat ; spp:wireFormatName "TextLines"       ; spp:wireFormatKind "text" .
+
+ex:auth-internal a spp:AuthScheme ; spp:authSchemeName "InternalInProcess"      ; spp:authSchemeKind "none" .
+ex:auth-cli      a spp:AuthScheme ; spp:authSchemeName "FilesystemPermissions" ; spp:authSchemeKind "os_permissions" .
+
+ex:env-internal a spp:ErrorEnvelope ; spp:errorEnvelopeKind "custom" ; spp:errorEnvelopeMediaType "application/internal+json" .
+ex:env-cli      a spp:ErrorEnvelope ; spp:errorEnvelopeKind "custom" ; spp:errorEnvelopeMediaType "text/plain" .
+
+ex:iface-cli a spp:Interface ;
+    spp:interfaceTransport ex:tr-cli ;
+    spp:interfaceWireFormat ex:wf-cli ;
+    spp:interfaceAuthScheme ex:auth-cli ;
+    spp:interfaceErrorClass ex:err-invalid-args, ex:err-backend-not-found, ex:err-parse-failed,
+                            ex:err-validation-failed, ex:err-lowering-failed,
+                            ex:err-unsupported-capability, ex:err-file-write ;
+    spp:interfaceErrorEnvelope ex:env-cli ;
+    spp:interfaceOperationBinding ex:ob-emit-cli, ex:ob-describe .
+
+ex:ob-load     a spp:OperationBinding ; spp:operationBindingKind "command" ; spp:operationBindingOperation ex:cmd-load-plan          ; spp:operationBindingTransport ex:tr-lib ; spp:operationBindingWireFormat ex:wf-internal .
+ex:ob-validate a spp:OperationBinding ; spp:operationBindingKind "command" ; spp:operationBindingOperation ex:cmd-validate-plan      ; spp:operationBindingTransport ex:tr-lib ; spp:operationBindingWireFormat ex:wf-internal .
+ex:ob-lower    a spp:OperationBinding ; spp:operationBindingKind "command" ; spp:operationBindingOperation ex:cmd-lower-to-ir        ; spp:operationBindingTransport ex:tr-lib ; spp:operationBindingWireFormat ex:wf-internal .
+ex:ob-compose  a spp:OperationBinding ; spp:operationBindingKind "command" ; spp:operationBindingOperation ex:cmd-compose-aspect-stack; spp:operationBindingTransport ex:tr-lib ; spp:operationBindingWireFormat ex:wf-internal .
+ex:ob-trace    a spp:OperationBinding ; spp:operationBindingKind "query"   ; spp:operationBindingOperation ex:q-trace-aspect-decision ; spp:operationBindingTransport ex:tr-lib ; spp:operationBindingWireFormat ex:wf-internal .
+
+ex:ob-check        a spp:OperationBinding ; spp:operationBindingKind "command" ; spp:operationBindingOperation ex:cmd-check-capability   ; spp:operationBindingTransport ex:tr-lib ; spp:operationBindingWireFormat ex:wf-internal .
+ex:ob-emit-project a spp:OperationBinding ; spp:operationBindingKind "command" ; spp:operationBindingOperation ex:cmd-emit-project       ; spp:operationBindingTransport ex:tr-lib ; spp:operationBindingWireFormat ex:wf-internal .
+ex:ob-emit-file    a spp:OperationBinding ; spp:operationBindingKind "command" ; spp:operationBindingOperation ex:cmd-emit-file          ; spp:operationBindingTransport ex:tr-lib ; spp:operationBindingWireFormat ex:wf-internal .
+ex:ob-record       a spp:OperationBinding ; spp:operationBindingKind "command" ; spp:operationBindingOperation ex:cmd-record-assumption  ; spp:operationBindingTransport ex:tr-lib ; spp:operationBindingWireFormat ex:wf-internal .
+
+ex:ob-emit-cli a spp:OperationBinding ; spp:operationBindingKind "command" ; spp:operationBindingOperation ex:cmd-emit-cli ; spp:operationBindingTransport ex:tr-cli ; spp:operationBindingWireFormat ex:wf-cli .
+ex:ob-describe a spp:OperationBinding ; spp:operationBindingKind "query"   ; spp:operationBindingOperation ex:q-describe   ; spp:operationBindingTransport ex:tr-cli ; spp:operationBindingWireFormat ex:wf-cli .
