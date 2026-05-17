@@ -56,7 +56,8 @@ class ShapeSchema:
         """
         if schema_format == "JSON":
             warnings.warn(
-                "The JSON format for shape schemas is deprecated and will be removed in a future version.",
+                "The JSON format for shape schemas is deprecated and will be removed in v2.0.0. "
+                "See docs/adr/ADR-010-json-format-deprecation.md for the deprecation policy.",
                 DeprecationWarning,
                 2,
             )

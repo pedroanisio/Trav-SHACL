@@ -1,3 +1,12 @@
+# v1.10.0 - 17 May 2026
+- **Full SHACL Core compliance milestone** — closes the Phase 1-3 compliance effort (8 commits from `4286b7d` through this release). See `cover-report-phase-3.md` for the final gap-closure status.
+- 27 polymorphic `Constraint` subclasses now declare a `SOURCE_COMPONENT` class attribute mapping to the SHACL §4 component IRI; enforced by a new drift guard.
+- New `TravSHACL.output.serialize_validation_report` emits a spec-conformant `sh:ValidationReport` graph (Turtle or JSON-LD) via `ShapeSchema.validate(report_format='turtle' | 'jsonld')`. The previous default `validate()` signature returns the per-shape dict byte-identically (side-by-side API).
+- PALS's Law contract: `tests/test_validation_report.py::test_roundtrip_invalid_instances_match_engine` rounds the serializer output back through rdflib and asserts the focus-node set matches the engine's classification.
+- `AndConstraint` and `XoneConstraint` engine saturation bug fixed via a polymorphic `participates_in_min_query()` accessor and target-passthrough triple emission. New end-to-end fixtures: `tests/cases/logical_constraints/case3` (sh:and), `case4` (sh:xone, with K-02 caveat). See ADR-009.
+- JSON shape format **formally deprecated**; will be removed in v2.0.0. The `DeprecationWarning` now cites the explicit removal version and points to `docs/adr/ADR-010-json-format-deprecation.md` for the policy.
+- 10 ADRs total (ADR-001 through ADR-010) now document the architectural decisions across the compliance effort.
+
 # v1.9.0 - 06 May 2025
 - Fix check for parsing shapes with `sh:or` constraints
 - Add switch `ignore_parsing_errors` to `ShapeSchema` to either log a warning or throw an exception for parsing errors
