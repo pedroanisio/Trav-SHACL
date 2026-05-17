@@ -408,6 +408,8 @@ class ShapeParser:
             if value.datatype:
                 return lexical + "^^<" + str(value.datatype) + ">"
             return lexical
+        if isinstance(value, rdflib.term.URIRef):
+            return "<" + str(value) + ">"
         return str(value)
 
     @staticmethod
