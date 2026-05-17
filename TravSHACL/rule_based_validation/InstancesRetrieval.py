@@ -58,8 +58,28 @@ class InstancesRetrieval:
 
         violations = []
         start = time.time() * 1000.0
+        # SHACL §5.2: $this is a pre-bound parameter equivalent to the
+        # variable ?this. Bare textual substitution with an IRI breaks SPARQL
+        # syntax when $this appears in the SELECT projection. Rewrite $this
+        # to ?this and bind the focus node by prepending a VALUES clause
+        # inside the outermost WHERE body.
+        normalized_query = query_str.replace("$this", "?this")
         for instance in instance_list:
-            query = query_str.replace("$this", "<" + instance + ">")
+            iri = "<" + instance + ">"
+            if "?this" in normalized_query:
+                lower = normalized_query.lower()
+                idx = lower.find("where")
+                brace = normalized_query.find("{", idx) if idx != -1 else -1
+                if brace != -1:
+                    query = (
+                        normalized_query[: brace + 1]
+                        + " VALUES ?this { " + iri + " } "
+                        + normalized_query[brace + 1 :]
+                    )
+                else:
+                    query = normalized_query
+            else:
+                query = normalized_query
             if len(self.endpoint.run_query(query)["results"]["bindings"]) > 0:
                 violations.append(instance)
         end = time.time() * 1000.0
