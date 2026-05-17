@@ -1,0 +1,54 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix test: <http://test.example.com/> .
+@prefix : <http://test.example.com/shapes/> .
+
+# sh:xone over TWO node-shape disjuncts.
+# Phase 3B forcing-function fixture: validates that XoneConstraint
+# participates in Shape.minQuery alongside AndConstraint (same fix; see
+# ADR-009).
+#
+# K-02 DEFERRAL (carried forward from P2C-A, locked in P3B per Q-22):
+# Trav-SHACL's engine currently treats sh:xone disjuncts as a conjunction
+# at the rule-pattern body level — it accepts a focus when BOTH disjuncts
+# match (the SHACL §4.6.4 strict "exactly one" requirement is NOT
+# enforced). Strict exactly-one would require engine support for counting
+# satisfied disjuncts in the interleave step, deferred until
+# sh:ValidationReport sub-result emission lands (Phase 4+).
+#
+# Engine-faithful ground truth (per inspection of tests/data/test.ttl;
+# matches case3 sh:and partitioning):
+#   Instance0: property1✓ property2✗  → invalid (≠ both match)
+#   Instance1: property1✓ property2✓  → valid (engine: both match;
+#                                              strict-xone WOULD be invalid)
+#   Instance2: property1✓ property2✓  → valid (same caveat)
+#   Instance3: property1✓ property2✗  → invalid
+#   Instance4: property1✗ property2✓  → invalid (engine: ≠ both match;
+#                                                strict-xone WOULD be valid)
+#   Instance5: property1✓ property2✓  → valid (same caveat)
+#   Instance6: property1✓ property2✓  → valid (same caveat)
+#   → valid: {1, 2, 5, 6}; invalid: {0, 3, 4}
+#
+# Strict-xone partition (for the deferred fix's future reference):
+#   valid: {0, 3, 4} (exactly one disjunct satisfied)
+#   invalid: {1, 2, 5, 6} (both disjuncts satisfied — violates exactly-one)
+# This is intentionally DIFFERENT from engine-faithful and DIFFERENT from
+# case3 sh:and. ADR-009 §Consequences pins K-02 as the deferred work.
+
+:HasProperty1 a sh:NodeShape ;
+  sh:property [
+    sh:path test:property1 ;
+    sh:minCount 1
+  ] .
+
+:HasProperty2 a sh:NodeShape ;
+  sh:property [
+    sh:path test:property2 ;
+    sh:minCount 1
+  ] .
+
+:ClassA a sh:NodeShape ;
+  sh:targetClass test:ClassA ;
+  sh:xone (
+    [ sh:node :HasProperty1 ]
+    [ sh:node :HasProperty2 ]
+  ) .

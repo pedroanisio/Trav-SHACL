@@ -79,6 +79,19 @@ class Constraint:
     def get_shape_ref(self):
         return self.shapeRef
 
+    def participates_in_min_query(self) -> bool:
+        """Return True if this constraint should participate in the shape's minQuery.
+
+        Polymorphic accessor consumed by Shape.compute_constraint_queries. The base-class
+        default preserves pre-P3B semantics: a constraint participates when it carries an
+        inter-shape reference (``shapeRef``). Subclasses that hold their shape-refs in a
+        different field (``AndConstraint.shapeRefs``, ``XoneConstraint.shapeRefs``)
+        override this to participate without inheriting the singular ``shapeRef`` field —
+        which is the load-bearing P3B fix that lets their ``compute_rule_pattern_body``
+        propagations reach the engine's interleave step. See ADR-009.
+        """
+        return self.shapeRef is not None
+
     def get_severity(self):
         return self.severity
 

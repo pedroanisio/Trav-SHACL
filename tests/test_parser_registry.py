@@ -645,3 +645,35 @@ def test_language_in_and_unique_lang_validate_language_tagged_literals(tmp_path)
         "http://test.example.com/BadLanguageThing",
         "http://test.example.com/DuplicateLanguageThing",
     ]
+
+
+# --- Phase 3B engine-surface tests for participates_in_min_query() ---
+
+
+def test_and_constraint_participates_in_min_query():
+    """AndConstraint must opt into Shape.minQuery so its shape-ref propagations reach the engine."""
+    from TravSHACL.constraints.AndConstraint import AndConstraint
+
+    constraint = AndConstraint("A", ["ShapeB", "ShapeC"], True, None)
+    assert constraint.participates_in_min_query() is True
+
+
+def test_xone_constraint_participates_in_min_query():
+    """XoneConstraint must opt into Shape.minQuery symmetrically with AndConstraint (P3B saturation fix)."""
+    from TravSHACL.constraints.XoneConstraint import XoneConstraint
+
+    constraint = XoneConstraint("X", ["ShapeB", "ShapeC"], True, None)
+    assert constraint.participates_in_min_query() is True
+
+
+def test_default_constraint_participates_via_shape_ref():
+    """Base-class default preserves pre-P3B semantics: participation iff shapeRef is not None."""
+    from TravSHACL.constraints.MinOnlyConstraint import MinOnlyConstraint
+    from TravSHACL.utils.VariableGenerator import VariableGenerator
+
+    var_generator = VariableGenerator()
+    without_ref = MinOnlyConstraint(var_generator, "id1", None, 1, True, None)
+    with_ref = MinOnlyConstraint(var_generator, "id2", None, 1, True, None, shape_ref="SomeShape")
+
+    assert without_ref.participates_in_min_query() is False
+    assert with_ref.participates_in_min_query() is True

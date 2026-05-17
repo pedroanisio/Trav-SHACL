@@ -1,0 +1,47 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix test: <http://test.example.com/> .
+@prefix : <http://test.example.com/shapes/> .
+
+# sh:and over TWO atomic property-shape conjuncts.
+# Phase 3B forcing-function fixture: validates the engine fix that admits
+# AndConstraint into Shape.minQuery via the polymorphic
+# participates_in_min_query() accessor (see ADR-009).
+#
+# Semantics: ClassA instances are valid iff they satisfy BOTH inner shapes
+# — i.e., have at least one test:property1 AND at least one test:property2.
+#
+# Ground truth (derived from rdflib parse of tests/data/test.ttl,
+# verifiable via `.venv/bin/python -c` over the data graph):
+#   Instance0: property1✓ property2✗  → invalid (missing property2)
+#   Instance1: property1✓ property2✓  → valid
+#   Instance2: property1✓ property2✓  → valid
+#   Instance3: property1✓ property2✗  → invalid (missing property2)
+#   Instance4: property1✗ property2✓  → invalid (missing property1)
+#   Instance5: property1✓ property2✓  → valid
+#   Instance6: property1✓ property2✓  → valid
+#   → valid: {1, 2, 5, 6}; invalid: {0, 3, 4}
+#
+# Per DEC-05 atomic-only carry-over: sh:and atomic-inner is supported by
+# the parser only when each inner is a node shape with shape-ref dispatch
+# semantics. This fixture uses two node-shape references (:HasProperty1
+# and :HasProperty2), not inline atomic property shapes — matching the
+# AndConstraint shape-ref propagation pattern.
+
+:HasProperty1 a sh:NodeShape ;
+  sh:property [
+    sh:path test:property1 ;
+    sh:minCount 1
+  ] .
+
+:HasProperty2 a sh:NodeShape ;
+  sh:property [
+    sh:path test:property2 ;
+    sh:minCount 1
+  ] .
+
+:ClassA a sh:NodeShape ;
+  sh:targetClass test:ClassA ;
+  sh:and (
+    [ sh:node :HasProperty1 ]
+    [ sh:node :HasProperty2 ]
+  ) .

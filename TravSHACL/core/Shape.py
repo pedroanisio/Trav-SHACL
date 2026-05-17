@@ -197,7 +197,7 @@ class Shape:
         if len(min_constraints) > 0:
             self.minQuery = self.QueryGenerator.generate_query(
                 min_id,
-                [c for c in min_constraints if c.get_shape_ref() is not None],
+                [c for c in min_constraints if c.participates_in_min_query()],
                 self.useSelectiveQueries,
                 self.targetQueryNoPref,
                 self.includePrefixes,
